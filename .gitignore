@@ -1,0 +1,12 @@
+.DS_Store
+__MACOSX/
+*.zip
+*.log
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+codex-local-backup-*
+.staging-codex-local-backup-*
+.backup-running/
+自动备份*.log
+auto-backup*.log
