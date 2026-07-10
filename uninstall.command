@@ -1,16 +1,23 @@
 #!/bin/zsh
 set -euo pipefail
 
-plist="$HOME/Library/LaunchAgents/com.jianhong.codex-backup.plist"
-label="com.jianhong.codex-backup"
+launch_agents="$HOME/Library/LaunchAgents"
+backup_root="$HOME/Documents/不怕codex罢工"
 
-echo "正在关闭“不怕 Codex 罢工”每日自动备份。"
-echo
+printf '正在关闭“不怕 Codex 罢工”每日自动备份。\n\n'
 
-launchctl bootout "gui/$(id -u)" "$plist" >/dev/null 2>&1 || true
-rm -f "$plist"
+for label in com.codexbackupkit.daily com.jianhong.codex-backup; do
+  plist="$launch_agents/$label.plist"
+  launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || true
+  launchctl bootout "gui/$(id -u)" "$plist" >/dev/null 2>&1 || true
+  rm -f -- "$plist"
+done
 
-echo "已关闭每日自动备份。"
-echo "已有备份文件仍保留在：$HOME/Documents/不怕codex罢工"
-echo
-read -k 1 -s '?按任意键关闭...'
+printf '每日自动备份已关闭。\n'
+printf '现有备份和手动备份功能仍保留在：%s\n' "$backup_root"
+
+if [[ -t 0 ]]; then
+  printf '\n'
+  read -k 1 -s '?按任意键关闭...'
+  printf '\n'
+fi

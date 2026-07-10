@@ -1,6 +1,8 @@
 .DS_Store
 __MACOSX/
 *.zip
+*.partial.zip
+*.sha256
 *.log
 *.sqlite
 *.sqlite-shm
@@ -8,5 +10,10 @@ __MACOSX/
 codex-local-backup-*
 .staging-codex-local-backup-*
 .backup-running/
+.codex-backup.lock/
+.codex-backup-kit.install.*/
+.codex-backup-kit.old.*/
 自动备份*.log
 auto-backup*.log
+last-run.log
+dist/

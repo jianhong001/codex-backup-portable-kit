@@ -1,158 +1,128 @@
 # Codex Backup Kit
 
-> A tiny macOS backup kit for people who rely on OpenAI Codex every day and do not want their local memory, skills, sessions, and workspaces to disappear with one broken login, failed update, or account switch.
+[![Tests](https://github.com/jianhong001/codex-backup-portable-kit/actions/workflows/test.yml/badge.svg)](https://github.com/jianhong001/codex-backup-portable-kit/actions/workflows/test.yml)
+[![Release](https://img.shields.io/github/v/release/jianhong001/codex-backup-portable-kit)](https://github.com/jianhong001/codex-backup-portable-kit/releases/latest)
+[![License](https://img.shields.io/github/license/jianhong001/codex-backup-portable-kit)](LICENSE)
 
-Codex Backup Kit creates an automatic local snapshot of your Codex environment every night. It is intentionally boring: one install script, one manual backup script, one uninstall script, and no cloud service.
+**Zero-token, low-disk local backups for OpenAI Codex on macOS and Windows.**
 
-## Why This Exists
+Codex Backup Kit preserves local sessions, memories, skills, settings, generated files, and project workspaces every night at 23:50. It uses the operating system scheduler, not a Codex automation, so scheduled runs do not call a model or consume tokens.
 
-AI coding agents are becoming part of daily work. Over time, your local Codex setup may accumulate:
-
-- useful memories and summaries
-- installed skills
-- thread/session history
-- project workspaces
-- generated outputs
-- local app state
-
-If Codex stops working, an account changes, or a machine is migrated, that local context can be hard to reconstruct. This project gives you a simple local safety net.
+[中文说明](README.zh-CN.md)
 
 ## Quick Start
 
-Download this repository, then double-click:
+Download the [latest release](https://github.com/jianhong001/codex-backup-portable-kit/releases/latest), unzip it, then run one file:
 
-```text
-install.command
-```
+| Platform | Installer |
+| --- | --- |
+| macOS | Double-click `安装-macOS.command` |
+| Windows | Double-click `安装-Windows.cmd` |
 
-That is it. The installer will:
+The installer creates a daily 23:50 system task and keeps only the newest successful backup.
 
-- create `~/Documents/不怕codex罢工`
-- install a daily macOS `launchd` job
-- run backups every day at `23:50`
-- keep only the newest backup to save disk space
+Default destination:
 
-## Manual Backup
+- macOS: `~/Documents/不怕codex罢工`
+- Windows: `Documents\不怕codex罢工`
 
-Double-click:
+## Why It Is Lightweight
 
-```text
-backup-now.command
-```
+The backup is streamed directly into a temporary ZIP. The previous successful ZIP remains in place while the new one is written and verified, but the script no longer creates a full staging copy of all source data.
 
-The backup will be written to:
+On the machine used to develop v2, the selected source set fell from roughly 6 GB to roughly 1.5 GB before compression by skipping reinstallable and transient data. Results vary by machine.
 
-```text
-~/Documents/不怕codex罢工
-```
+Default exclusions include:
 
-Backup files look like:
+- `auth.json`
+- Codex standalone packages and large log databases
+- plugin, browser, computer-use, shell, and temporary caches
+- project `.venv`, `venv`, `node_modules`, `__pycache__`, and common development caches
+- the Codex Chromium profile, which can contain cookies and login data
 
-```text
-codex-local-backup-2026-07-07-235000.zip
-```
+Generated images, attachments, project source files, project output files, and Git history are not excluded.
 
-## What Gets Backed Up
+## Safety Model
 
-The script backs up common local Codex data locations on macOS:
+Every run follows the same order:
 
-- `~/.codex`
-- `~/Documents/Codex`
+1. Acquire a single-run lock.
+2. Create consistent SQLite snapshots where the platform provides `sqlite3`.
+3. Stream selected files to `*.partial.zip`.
+4. Read the complete ZIP to verify it.
+5. Generate a SHA-256 checksum.
+6. Promote the new ZIP to the final name.
+7. Delete older archives only after all previous steps succeed.
+
+If a run fails, the partial ZIP is removed while the previous backup and all source files remain untouched.
+
+## What Is Backed Up
+
+- `CODEX_HOME`, defaulting to `~/.codex`
+- `~/Documents/Codex` or the Windows `Documents\Codex` folder
 - `~/.agents/skills`
-- `~/Library/Application Support/Codex`
-- `~/Library/Application Support/com.openai.codex`
+- a manifest describing sources, exclusions, and SQLite handling
 
-It also creates consistent snapshots of top-level `.sqlite` files when `sqlite3` is available.
-
-## Disk-Saving Behavior
-
-By default, only the newest backup is kept:
+Archives use a stable layout:
 
 ```text
---keep 1
+codex-home/
+projects/
+agents-skills/
+backup-metadata/
 ```
 
-Old backups are deleted only after a new backup succeeds. If a new backup fails, the previous backup remains.
+## Manual Use
 
-You can keep more backups manually:
+macOS:
 
 ```bash
-zsh codex_backup.sh --keep 3
+zsh codex_backup.sh --dry-run
+zsh codex_backup.sh --dest /path/to/backups --keep 1
+zsh codex_backup.sh --include-dependencies
 ```
 
-## Security Defaults
+Windows PowerShell:
 
-By default, `auth.json` is excluded.
+```powershell
+.\codex_backup.ps1 -DryRun
+.\codex_backup.ps1 -Destination D:\Backups -Keep 1
+.\codex_backup.ps1 -IncludeDependencies
+```
 
-That means this project is designed to preserve your local work and context, not to clone your login session.
+`--include-auth` and `-IncludeAuth` remain available for advanced use, but archives containing `auth.json` must be treated as credentials.
 
-If you explicitly want a full local snapshot that includes the login token file, you can run:
+## Scheduling and Notifications
+
+- macOS uses `launchd` from the ASCII-only internal path `~/.codex-backup-kit`.
+- Windows uses Task Scheduler from `%LOCALAPPDATA%\CodexBackupKit`.
+- Both run at low process priority and prevent overlapping runs.
+- The latest run overwrites `last-run.log`; logs do not grow forever.
+- A local system notification reports success, failure, or a skipped overlapping run.
+
+No scheduled run starts Codex or calls an AI model.
+
+## Restore Boundary
+
+The ZIP preserves local data and makes files available for inspection or same-platform restoration. It cannot guarantee that a different Codex account will display old tasks in the app UI, and v2 does not perform an automatic full restore across macOS and Windows.
+
+## Security
+
+Backups can contain private conversations, memories, source code, and work documents. Keep them private and never commit them to a public repository. See [SECURITY.md](SECURITY.md).
+
+## Development
+
+Fixture tests cover inclusion rules, exclusions, retention, checksums, Unicode names, and failure preservation on both operating systems.
 
 ```bash
-zsh codex_backup.sh --include-auth
+zsh tests/test_macos.sh
 ```
 
-Treat any backup created with `--include-auth` as highly sensitive.
+Windows tests run in GitHub Actions with Windows PowerShell 5.1.
 
-## Restore
+## Star the Project
 
-This project currently focuses on reliable backup, not one-click restore.
-
-To inspect a backup, unzip the latest `codex-local-backup-*.zip` and look for:
-
-- `dotcodex/memories`
-- `dotcodex/sessions`
-- `dotcodex/archived_sessions`
-- `dotcodex/skills`
-- `Documents-Codex`
-
-## Uninstall
-
-Double-click:
-
-```text
-uninstall.command
-```
-
-This removes the daily scheduled backup job. Existing backups are not deleted.
-
-## For Chinese Users
-
-这个工具的中文名字是：**不怕 Codex 罢工**。
-
-最简单用法：
-
-1. 下载仓库。
-2. 双击 `install.command`。
-3. 以后每天晚上 23:50 自动备份。
-
-备份默认保存在：
-
-```text
-~/Documents/不怕codex罢工
-```
-
-默认只保留最新 1 份备份，避免硬盘被塞满。
-
-## What This Is Not
-
-- It is not an official OpenAI project.
-- It is not a cloud sync service.
-- It is not a replacement for official data export.
-- It does not guarantee that a new Codex account will show old threads in the UI.
-
-## Roadmap
-
-- One-click restore helper
-- Optional external-drive backup destination
-- Better backup manifest
-- GitHub release package
-
-## Star This Project
-
-If Codex has become part of your daily work, this project is meant to be a small insurance policy for your local setup.
-
-Star it if you want a simple, local-first backup tool for AI coding-agent context.
+If Codex has become part of your daily work, a star helps other users find a backup workflow that does not spend tokens just to copy files.
 
 ## License
 
