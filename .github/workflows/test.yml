@@ -11,7 +11,7 @@ jobs:
   macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Check zsh syntax
         run: zsh -n codex_backup.sh install.command backup-now.command uninstall.command *.command
       - name: Run macOS fixture tests
@@ -20,7 +20,7 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Parse PowerShell scripts
         shell: powershell
         run: |

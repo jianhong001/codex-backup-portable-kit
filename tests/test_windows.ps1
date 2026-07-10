@@ -124,8 +124,12 @@ try {
     New-FixtureFile (Join-Path $FailureDestination "codex-local-backup-2000-01-01-000000.zip") "old-backup"
     $OriginalCodexHome = $env:CODEX_HOME
     $env:CODEX_HOME = Join-Path $TestRoot "missing-codex-home"
-    & $Engine -NoProfile -ExecutionPolicy Bypass -File $BackupScript -Destination $FailureDestination 2>$null
-    Assert-True ($LASTEXITCODE -ne 0) "Expected missing CODEX_HOME to fail"
+    $OriginalErrorPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & $Engine -NoProfile -ExecutionPolicy Bypass -File $BackupScript -Destination $FailureDestination *> $null
+    $FailureExitCode = $LASTEXITCODE
+    $ErrorActionPreference = $OriginalErrorPreference
+    Assert-True ($FailureExitCode -ne 0) "Expected missing CODEX_HOME to fail"
     $env:CODEX_HOME = $OriginalCodexHome
     Assert-True (Test-Path -LiteralPath (Join-Path $FailureDestination "codex-local-backup-2000-01-01-000000.zip")) "Failure removed the previous backup"
     Assert-True (@(Get-ChildItem -LiteralPath $FailureDestination -Filter "*.partial.zip" -File).Count -eq 0) "Failure left a partial archive"
