@@ -9,6 +9,7 @@
 - Add consistent macOS SQLite snapshots and a Windows raw-file fallback when `sqlite3` is unavailable.
 - Verify every ZIP and generate a SHA-256 checksum before pruning older backups.
 - Add stale-lock recovery, bounded logs, local notifications, and fixture tests.
+- Route macOS scheduled runs through Terminal so they inherit the user's Documents permission.
 
 ## 1.0.0 - 2026-07-07
 

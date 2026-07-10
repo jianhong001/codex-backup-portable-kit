@@ -18,6 +18,7 @@ files=(
   VERSION
   怎么用.md
   codex_backup.sh
+  scheduled-launcher.command
   install.command
   backup-now.command
   uninstall.command

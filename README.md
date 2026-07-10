@@ -94,13 +94,15 @@ Windows PowerShell:
 
 ## Scheduling and Notifications
 
-- macOS uses `launchd` from the ASCII-only internal path `~/.codex-backup-kit`.
+- macOS uses `launchd` to open an ASCII-only launcher in Terminal, allowing the scheduled run to use the same Documents permission as a manual Terminal run.
 - Windows uses Task Scheduler from `%LOCALAPPDATA%\CodexBackupKit`.
 - Both run at low process priority and prevent overlapping runs.
 - The latest run overwrites `last-run.log`; logs do not grow forever.
 - A local system notification reports success, failure, or a skipped overlapping run.
 
 No scheduled run starts Codex or calls an AI model.
+
+macOS may show a one-time request allowing Terminal to access Documents. Approve it so project workspaces can be included.
 
 ## Restore Boundary
 

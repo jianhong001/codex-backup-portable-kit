@@ -5,6 +5,7 @@ umask 077
 
 script_dir="${0:A:h}"
 source_script="$script_dir/codex_backup.sh"
+source_scheduled_launcher="$script_dir/scheduled-launcher.command"
 install_root="$HOME/.codex-backup-kit"
 install_stage="$HOME/.codex-backup-kit.install.$$"
 old_install="$HOME/.codex-backup-kit.old.$$"
@@ -32,8 +33,8 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
-[[ -f "$source_script" ]] || {
-  printf '安装包不完整：找不到 codex_backup.sh\n' >&2
+[[ -f "$source_script" && -f "$source_scheduled_launcher" ]] || {
+  printf '安装包不完整：找不到 macOS 备份脚本。\n' >&2
   exit 1
 }
 
@@ -42,8 +43,10 @@ printf '正在安装“不怕 Codex 罢工”2.0。\n\n'
 rm -rf -- "$install_stage"
 mkdir -p -- "$install_stage" "$backup_root" "$launch_agents"
 cp -- "$source_script" "$install_stage/codex_backup.sh"
-chmod 700 "$install_stage/codex_backup.sh"
+cp -- "$source_scheduled_launcher" "$install_stage/scheduled-launcher.command"
+chmod 700 "$install_stage/codex_backup.sh" "$install_stage/scheduled-launcher.command"
 /bin/zsh -n "$install_stage/codex_backup.sh"
+/bin/zsh -n "$install_stage/scheduled-launcher.command"
 
 if [[ -d "$install_root" ]]; then
   rm -rf -- "$old_install"
@@ -61,9 +64,11 @@ cat > "$plist_tmp" <<EOF
   <string>$label</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/zsh</string>
-    <string>$install_root/codex_backup.sh</string>
-    <string>--scheduled</string>
+    <string>/usr/bin/open</string>
+    <string>-gj</string>
+    <string>-a</string>
+    <string>Terminal</string>
+    <string>$install_root/scheduled-launcher.command</string>
   </array>
   <key>StartCalendarInterval</key>
   <dict>
@@ -72,8 +77,6 @@ cat > "$plist_tmp" <<EOF
     <key>Minute</key>
     <integer>50</integer>
   </dict>
-  <key>Nice</key>
-  <integer>10</integer>
   <key>ProcessType</key>
   <string>Background</string>
   <key>StandardOutPath</key>
