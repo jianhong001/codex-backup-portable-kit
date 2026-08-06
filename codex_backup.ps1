@@ -12,7 +12,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$Version = "2.0.0"
+$Version = "2.1.0"
 $Documents = [Environment]::GetFolderPath("MyDocuments")
 $BackupFolderName = -join @([char]0x4E0D, [char]0x6015, "codex", [char]0x7F62, [char]0x5DE5)
 if ([string]::IsNullOrWhiteSpace($Destination)) {
@@ -304,8 +304,8 @@ Default exclusions:
 - project dependency/cache folders unless -IncludeDependencies is used
 
 Restore note:
-This archive preserves local files. It does not guarantee that another Codex
-account will display old tasks in the app UI.
+This Windows archive preserves local files. Automatic sidebar merge restore is
+currently implemented only for Mac-to-Mac archives.
 "@
         Set-Content -LiteralPath (Join-Path $MetadataRoot "MANIFEST.txt") -Value $Manifest -Encoding UTF8
 

@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/jianhong001/codex-backup-portable-kit)](https://github.com/jianhong001/codex-backup-portable-kit/releases/latest)
 [![License](https://img.shields.io/github/license/jianhong001/codex-backup-portable-kit)](LICENSE)
 
-**Zero-token, low-disk local backups for OpenAI Codex on macOS and Windows.**
+**Zero-token, low-disk local backups for OpenAI Codex on macOS and Windows, with offline Mac-to-Mac history migration.**
 
 Codex Backup Kit preserves local sessions, memories, skills, settings, generated files, and project workspaces every night at 23:50. It uses the operating system scheduler, not a Codex automation, so scheduled runs do not call a model or consume tokens.
 
@@ -25,6 +25,26 @@ Default destination:
 
 - macOS: `~/Documents/不怕codex罢工`
 - Windows: `Documents\不怕codex罢工`
+
+## Move to Another Mac or OpenAI Account
+
+The v2.1 Mac workflow is fully offline and needs no Python, Homebrew, or npm:
+
+1. Quit Codex on the old Mac, connect an external drive, and double-click `第1步-旧Mac制作迁移包.command`.
+2. On the new Mac, install Codex, sign in to the new OpenAI account, open Codex once, and quit it completely.
+3. Connect the drive and double-click `第2步-新Mac恢复聊天.command` inside `不怕Codex罢工-迁移到新Mac`.
+4. Reopen Codex after the success message.
+
+The restore merges rather than replaces:
+
+- Existing destination threads remain intact.
+- Imported threads are reassigned to the destination provider and added to the sidebar index.
+- Divergent sessions sharing one thread ID receive a deterministic new ID, so both remain visible without multiplying on repeated imports.
+- Memory documents and SQLite state, goals, skills, projects, attachments, and generated files are merged.
+- The destination `auth.json` and `config.toml` remain byte-for-byte unchanged.
+- A verified pre-restore safety archive is created before writes, and partial writes are rolled back automatically.
+
+Only the newest restore safety archive and file-conflict archive are retained.
 
 ## Why It Is Lightweight
 
@@ -106,7 +126,9 @@ macOS may show a one-time request allowing Terminal to access Documents. Approve
 
 ## Restore Boundary
 
-The ZIP preserves local data and makes files available for inspection or same-platform restoration. It cannot guarantee that a different Codex account will display old tasks in the app UI, and v2 does not perform an automatic full restore across macOS and Windows.
+The Mac-to-Mac workflow merges the current local Codex SQLite, JSONL, and session-index formats so imported tasks can appear in the local sidebar. It does not transfer cloud permissions, subscriptions, remote tasks, or server-side data between OpenAI accounts. Automatic sidebar restoration is not yet provided for Windows or cross-platform Mac/Windows moves.
+
+Provider reconciliation behavior was cross-checked against [codex-history-sync-tool](https://github.com/GODGOD126/codex-history-sync-tool) and [codex-threadripper](https://github.com/Wangnov/codex-threadripper); this project adds offline cross-machine packaging, merge semantics, deterministic conflict copies, and rollback.
 
 ## Security
 
@@ -114,10 +136,11 @@ Backups can contain private conversations, memories, source code, and work docum
 
 ## Development
 
-Fixture tests cover inclusion rules, exclusions, retention, checksums, Unicode names, and failure preservation on both operating systems.
+Fixture tests cover inclusion rules, exclusions, retention, checksums, Unicode names, merge idempotency, provider reconciliation, credential isolation, divergent thread IDs, and failure rollback.
 
 ```bash
 zsh tests/test_macos.sh
+zsh tests/test_macos_restore.sh
 ```
 
 Windows tests run in GitHub Actions with Windows PowerShell 5.1.

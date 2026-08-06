@@ -3,7 +3,7 @@ set -euo pipefail
 
 umask 077
 
-readonly VERSION="2.0.0"
+readonly VERSION="2.1.0"
 readonly DEFAULT_BACKUP_ROOT="$HOME/Documents/不怕codex罢工"
 readonly INSTALL_ROOT="${CODEX_BACKUP_INSTALL_ROOT:-$HOME/.codex-backup-kit}"
 
@@ -288,8 +288,8 @@ Default exclusions:
 - project dependency/cache folders unless --include-dependencies is used
 
 Restore note:
-This archive preserves local files. It does not guarantee that another Codex
-account will display old tasks in the app UI.
+On macOS, use codex_restore_macos.sh to merge this archive into a new local
+account without copying auth.json. Cloud account data is not transferred.
 EOF
 
 archive_inputs+=(backup-metadata)

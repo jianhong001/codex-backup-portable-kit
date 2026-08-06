@@ -15,7 +15,9 @@ jobs:
       - name: Check zsh syntax
         run: zsh -n codex_backup.sh install.command backup-now.command uninstall.command *.command
       - name: Run macOS fixture tests
-        run: zsh tests/test_macos.sh
+        run: |
+          zsh tests/test_macos.sh
+          zsh tests/test_macos_restore.sh
 
   windows:
     runs-on: windows-latest
