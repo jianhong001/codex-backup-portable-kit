@@ -12,7 +12,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$Version = "2.1.0"
+$Version = "2.2.0"
 $Documents = [Environment]::GetFolderPath("MyDocuments")
 $BackupFolderName = -join @([char]0x4E0D, [char]0x6015, "codex", [char]0x7F62, [char]0x5DE5)
 if ([string]::IsNullOrWhiteSpace($Destination)) {
@@ -25,6 +25,7 @@ $ProjectsRoot = if ($env:CODEX_PROJECTS_DIR) { $env:CODEX_PROJECTS_DIR } else { 
 $AgentsSkills = if ($env:AGENTS_SKILLS_DIR) { $env:AGENTS_SKILLS_DIR } else { Join-Path $HOME ".agents\skills" }
 $InstallRoot = if ($env:CODEX_BACKUP_INSTALL_ROOT) { $env:CODEX_BACKUP_INSTALL_ROOT } else { Join-Path $env:LOCALAPPDATA "CodexBackupKit" }
 $LogFile = Join-Path $InstallRoot "last-run.log"
+$ComputerName = if ($env:CODEX_BACKUP_COMPUTER_NAME) { $env:CODEX_BACKUP_COMPUTER_NAME } elseif ($env:COMPUTERNAME) { $env:COMPUTERNAME } else { [Environment]::MachineName }
 
 $script:SnapshotCount = 0
 $script:LogEnabled = $false
@@ -203,6 +204,7 @@ if ($DryRun) {
     Write-Host "Codex home: $CodexHome"
     Write-Host "Projects: $ProjectsRoot"
     Write-Host "Agent skills: $AgentsSkills"
+    Write-Host "Computer name: $ComputerName"
     Write-Host "Include auth.json: $([bool]$IncludeAuth)"
     Write-Host "Include project dependencies: $([bool]$IncludeDependencies)"
     Write-Host ""
@@ -284,6 +286,7 @@ try {
 Codex Backup Kit
 Version: $Version
 Created: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss K")
+Computer name: $ComputerName
 Host: $env:COMPUTERNAME
 
 Codex home: $CodexHome

@@ -45,12 +45,33 @@ function Get-ZipEntries {
     }
 }
 
+function Get-ZipEntryText {
+    param([string]$Path, [string]$EntryName)
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $Zip = [System.IO.Compression.ZipFile]::OpenRead($Path)
+    try {
+        $Entry = $Zip.GetEntry($EntryName)
+        if ($null -eq $Entry) { throw "Missing ZIP entry: $EntryName" }
+        $Reader = [System.IO.StreamReader]::new($Entry.Open(), [System.Text.Encoding]::UTF8)
+        try {
+            return $Reader.ReadToEnd()
+        }
+        finally {
+            $Reader.Dispose()
+        }
+    }
+    finally {
+        $Zip.Dispose()
+    }
+}
+
 function Assert-True {
     param([bool]$Condition, [string]$Message)
     if (-not $Condition) { throw $Message }
 }
 
 try {
+    $env:CODEX_BACKUP_COMPUTER_NAME = "Windows Fixture"
     New-FixtureFile (Join-Path $CodexHome "sessions\thread.jsonl") "thread"
     New-FixtureFile (Join-Path $CodexHome "memories\note.md") "memory"
     New-FixtureFile (Join-Path $CodexHome "skills\example\SKILL.md") "skill"
@@ -79,6 +100,8 @@ try {
     $Archives = @(Get-ChildItem -LiteralPath $Backups -Filter "codex-local-backup-*.zip" -File)
     Assert-True ($Archives.Count -eq 1) "Expected one backup"
     Assert-True (Test-Path -LiteralPath "$($Archives[0].FullName).sha256") "Missing checksum"
+    $Manifest = Get-ZipEntryText -Path $Archives[0].FullName -EntryName "backup-metadata/MANIFEST.txt"
+    Assert-True ($Manifest -match "(?m)^Computer name: Windows Fixture\r?$") "Manifest did not preserve the configured computer name"
 
     $Entries = Get-ZipEntries -Path $Archives[0].FullName
     foreach ($Expected in @(

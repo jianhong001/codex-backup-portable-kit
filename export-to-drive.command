@@ -67,6 +67,10 @@ restore_script="$(find_component codex_restore_macos.sh)" || {
   printf '找不到恢复引擎，请下载完整安装包。\n' >&2
   exit 1
 }
+project_layout_helper="$(find_component codex_project_layout_macos.js)" || {
+  printf '找不到项目分组恢复组件，请重新运行安装程序。\n' >&2
+  exit 1
+}
 restore_wrapper="$(find_component 第2步-新Mac恢复聊天.command)" || {
   printf '找不到新 Mac 恢复入口，请下载完整安装包。\n' >&2
   exit 1
@@ -121,9 +125,10 @@ printf '保存位置：%s\n\n' "$transfer_folder"
 /bin/zsh "$backup_script" --dest "$transfer_folder" --keep 1
 
 cp -p -- "$restore_script" "$transfer_folder/codex_restore_macos.sh"
+cp -p -- "$project_layout_helper" "$transfer_folder/codex_project_layout_macos.js"
 cp -p -- "$restore_wrapper" "$transfer_folder/第2步-新Mac恢复聊天.command"
-chmod 700 "$transfer_folder/codex_restore_macos.sh" "$transfer_folder/第2步-新Mac恢复聊天.command"
-/usr/bin/xattr -d com.apple.quarantine "$transfer_folder/codex_restore_macos.sh" "$transfer_folder/第2步-新Mac恢复聊天.command" >/dev/null 2>&1 || true
+chmod 700 "$transfer_folder/codex_restore_macos.sh" "$transfer_folder/codex_project_layout_macos.js" "$transfer_folder/第2步-新Mac恢复聊天.command"
+/usr/bin/xattr -d com.apple.quarantine "$transfer_folder/codex_restore_macos.sh" "$transfer_folder/codex_project_layout_macos.js" "$transfer_folder/第2步-新Mac恢复聊天.command" >/dev/null 2>&1 || true
 
 cat > "$transfer_folder/新Mac怎么恢复.txt" <<'EOF'
 1. 在新 Mac 安装 Codex，登录新 OpenAI 账号，至少打开一次 Codex。
@@ -132,6 +137,7 @@ cat > "$transfer_folder/新Mac怎么恢复.txt" <<'EOF'
 4. 恢复成功后重新打开 Codex。
 
 恢复采用合并方式：新旧聊天都会保留；memory、skills 和项目也会合并。
+旧 Mac 的聊天会按原项目归类；同名项目会加上旧 Mac 电脑名，保持独立。
 不会复制旧账号的 auth.json、Cookie 或登录状态。
 EOF
 

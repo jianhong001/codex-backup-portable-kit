@@ -13,6 +13,9 @@ shared_id="22222222-2222-4222-a222-222222222222"
 new_id="33333333-3333-4333-a333-333333333333"
 archived_id="44444444-4444-4444-a444-444444444444"
 prefix_id="55555555-5555-4555-a555-555555555555"
+old_project_id="old-project-fixture"
+new_project_id="new-project-fixture"
+old_computer_name="旧 Mac 测试机"
 
 create_state_db() {
   local database="$1"
@@ -111,6 +114,34 @@ insert_thread() {
   /usr/bin/sqlite3 "$database" "INSERT INTO threads (id, rollout_path, created_at, updated_at, source, model_provider, cwd, title, sandbox_policy, approval_mode, archived, cli_version, first_user_message, model, created_at_ms, updated_at_ms, preview) VALUES ('$id', '$escaped_path', 1700000000, 1700000010, 'vscode', '$provider', '$escaped_cwd', '$escaped_title', '{}', 'never', $archived, 'fixture', '$escaped_title', 'fixture-model', 1700000000000, 1700000010000, '$escaped_title');"
 }
 
+global_state_value() {
+  local state_file="$1"
+  local key_path="$2"
+  CODEX_TEST_GLOBAL_STATE="$state_file" \
+  CODEX_TEST_GLOBAL_KEY_PATH="$key_path" \
+    /usr/bin/osascript -l JavaScript <<'JXA'
+ObjC.import('Foundation');
+
+function environmentValue(name) {
+  const value = $.NSProcessInfo.processInfo.environment.objectForKey($(name));
+  return value ? ObjC.unwrap(value) : '';
+}
+
+const statePath = environmentValue('CODEX_TEST_GLOBAL_STATE');
+const keyPath = environmentValue('CODEX_TEST_GLOBAL_KEY_PATH');
+const data = $.NSData.dataWithContentsOfFile($(statePath));
+const text = ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding));
+let value = JSON.parse(text);
+for (const key of keyPath.split(/\\t|\t/)) {
+  if (!Object.prototype.hasOwnProperty.call(value, key)) {
+    throw new Error(`Missing key: ${key}`);
+  }
+  value = value[key];
+}
+typeof value === 'string' ? value : JSON.stringify(value);
+JXA
+}
+
 create_old_home() {
   local home="$1"
   local codex="$home/.codex"
@@ -148,6 +179,7 @@ create_old_home() {
   /usr/bin/sqlite3 "$codex/goals_1.sqlite" "INSERT INTO thread_goals VALUES ('$old_id', 'goal-old', 'old objective', 'complete', NULL, 0, 0, 1, 2);"
   printf '{"id":"%s","thread_name":"旧 Mac 独有聊天","updated_at":"2026-01-01T00:00:00Z"}\n' "$old_id" > "$codex/session_index.jsonl"
   printf '{"id":"%s","thread_name":"同 ID 旧分支","updated_at":"2026-01-01T00:00:01Z"}\n' "$shared_id" >> "$codex/session_index.jsonl"
+  printf '%s\n' "{\"local-projects\":{\"$old_project_id\":{\"id\":\"$old_project_id\",\"name\":\"旧项目\",\"rootPaths\":[\"$projects/旧项目\"],\"createdAt\":1,\"updatedAt\":2}},\"thread-project-assignments\":{\"$old_id\":{\"projectKind\":\"local\",\"projectId\":\"$old_project_id\",\"cwd\":\"$projects/旧项目\",\"pendingCoreUpdate\":false},\"$shared_id\":{\"projectKind\":\"local\",\"projectId\":\"$old_project_id\",\"cwd\":\"$projects/旧项目\",\"pendingCoreUpdate\":false},\"$prefix_id\":{\"projectKind\":\"local\",\"projectId\":\"$old_project_id\",\"cwd\":\"$projects/旧项目\",\"pendingCoreUpdate\":false}},\"project-order\":[\"$old_project_id\"],\"projectless-thread-ids\":[\"$archived_id\"],\"thread-workspace-root-hints\":{\"$old_id\":\"$projects/旧项目\",\"$shared_id\":\"$projects/旧项目\",\"$prefix_id\":\"$projects/旧项目\"},\"sidebar-project-thread-orders\":{\"$old_project_id\":{\"threadIds\":[\"$old_id\",\"$shared_id\",\"$prefix_id\"]}},\"electron-saved-workspace-roots\":[\"$projects/旧项目\"]}" > "$codex/.codex-global-state.json"
 }
 
 create_new_home() {
@@ -179,6 +211,7 @@ create_new_home() {
   /usr/bin/sqlite3 "$codex/goals_1.sqlite" "INSERT INTO thread_goals VALUES ('$new_id', 'goal-new', 'new objective', 'active', NULL, 0, 0, 1, 2);"
   printf '{"id":"%s","thread_name":"同 ID 新分支","updated_at":"2026-02-02T00:00:00Z"}\n' "$shared_id" > "$codex/session_index.jsonl"
   printf '{"id":"%s","thread_name":"新 Mac 独有聊天","updated_at":"2026-02-02T00:00:01Z"}\n' "$new_id" >> "$codex/session_index.jsonl"
+  printf '%s\n' "{\"local-projects\":{\"$new_project_id\":{\"id\":\"$new_project_id\",\"name\":\"旧项目\",\"rootPaths\":[\"$projects/旧项目\"],\"createdAt\":3,\"updatedAt\":4}},\"thread-project-assignments\":{\"$shared_id\":{\"projectKind\":\"local\",\"projectId\":\"$new_project_id\",\"cwd\":\"$projects\",\"pendingCoreUpdate\":false},\"$new_id\":{\"projectKind\":\"local\",\"projectId\":\"$new_project_id\",\"cwd\":\"$projects\",\"pendingCoreUpdate\":false},\"$prefix_id\":{\"projectKind\":\"local\",\"projectId\":\"$new_project_id\",\"cwd\":\"$projects\",\"pendingCoreUpdate\":false}},\"project-order\":[\"$new_project_id\"],\"projectless-thread-ids\":[],\"thread-workspace-root-hints\":{\"$shared_id\":\"$projects\",\"$new_id\":\"$projects\",\"$prefix_id\":\"$projects\"},\"sidebar-project-thread-orders\":{\"$new_project_id\":{\"threadIds\":[\"$shared_id\",\"$new_id\",\"$prefix_id\"]}},\"electron-saved-workspace-roots\":[\"$projects\"]}" > "$codex/.codex-global-state.json"
 }
 
 run_restore() {
@@ -208,20 +241,31 @@ CODEX_SQLITE_HOME="$old_home/.codex" \
 CODEX_PROJECTS_DIR="$old_home/Documents/Codex" \
 AGENTS_SKILLS_DIR="$old_home/.agents/skills" \
 CODEX_BACKUP_INSTALL_ROOT="$old_home/.codex-backup-kit" \
+CODEX_BACKUP_COMPUTER_NAME="$old_computer_name" \
   /bin/zsh "$export_script" --dest "$archive_root" --yes >/dev/null
 
 transfer_folder="$archive_root/不怕Codex罢工-迁移到新Mac"
 [[ -x "$transfer_folder/第2步-新Mac恢复聊天.command" ]] || { print -u2 -- 'Portable restore wrapper is missing'; exit 1; }
 [[ -x "$transfer_folder/codex_restore_macos.sh" ]] || { print -u2 -- 'Portable restore engine is missing'; exit 1; }
+[[ -x "$transfer_folder/codex_project_layout_macos.js" ]] || { print -u2 -- 'Portable project-layout helper is missing'; exit 1; }
 [[ -f "$transfer_folder/新Mac怎么恢复.txt" ]] || { print -u2 -- 'Portable instructions are missing'; exit 1; }
 archives=("$transfer_folder"/codex-local-backup-*.zip(N))
 (( ${#archives[@]} == 1 )) || { print -u2 -- 'Expected one source archive'; exit 1; }
 archive="${archives[1]}"
 [[ -f "${archive}.sha256" ]] || { print -u2 -- 'Missing source checksum'; exit 1; }
+/usr/bin/unzip -p "$archive" backup-metadata/MANIFEST.txt | /usr/bin/grep -Fxq -- "Computer name: $old_computer_name" || {
+  print -u2 -- 'Source computer name is missing from the manifest'
+  exit 1
+}
 
+dry_run_global_hash="$(/usr/bin/shasum -a 256 "$new_home/.codex/.codex-global-state.json" | /usr/bin/awk '{print $1}')"
 run_restore "$new_home" "$archive" --dry-run >/dev/null
 [[ "$(/usr/bin/sqlite3 "$new_home/.codex/state_5.sqlite" 'SELECT COUNT(*) FROM threads;')" == 3 ]] || {
   print -u2 -- 'Dry run modified destination state'
+  exit 1
+}
+[[ "$dry_run_global_hash" == "$(/usr/bin/shasum -a 256 "$new_home/.codex/.codex-global-state.json" | /usr/bin/awk '{print $1}')" ]] || {
+  print -u2 -- 'Dry run modified destination project layout'
   exit 1
 }
 
@@ -248,6 +292,38 @@ state="$new_home/.codex/state_5.sqlite"
 [[ "$config_hash_before" == "$(/usr/bin/shasum -a 256 "$new_home/.codex/config.toml" | /usr/bin/awk '{print $1}')" ]] || { print -u2 -- 'config.toml changed'; exit 1; }
 [[ "$(<"$new_home/.codex/auth.json")" == NEW_SECRET ]] || { print -u2 -- 'Old credential was imported'; exit 1; }
 
+global_state="$new_home/.codex/.codex-global-state.json"
+global_state_value "$global_state" 'local-projects' >/dev/null
+[[ "$(global_state_value "$global_state" "local-projects\t$new_project_id\tname")" == '旧项目' ]] || {
+  print -u2 -- 'New Mac project name changed'
+  exit 1
+}
+[[ "$(global_state_value "$global_state" "thread-project-assignments\t$new_id\tprojectId")" == "$new_project_id" ]] || {
+  print -u2 -- 'New Mac thread was moved into an imported project'
+  exit 1
+}
+old_import_project_id="$(global_state_value "$global_state" "thread-project-assignments\t$old_id\tprojectId")"
+[[ "$(global_state_value "$global_state" "local-projects\t$old_import_project_id\tname")" == "旧项目（$old_computer_name）" ]] || {
+  print -u2 -- 'Imported project did not retain the old Mac label'
+  exit 1
+}
+fork_id="$(/usr/bin/sqlite3 -noheader "$state" "SELECT id FROM threads WHERE title LIKE '%旧 Mac 导入副本%' LIMIT 1;")"
+[[ -n "$fork_id" ]] || { print -u2 -- 'Could not find the imported fork ID'; exit 1; }
+[[ "$(global_state_value "$global_state" "thread-project-assignments\t$fork_id\tprojectId")" == "$old_import_project_id" ]] || {
+  print -u2 -- 'Imported fork was not assigned to the old project'
+  exit 1
+}
+ungrouped_import_project_id="$(global_state_value "$global_state" "thread-project-assignments\t$archived_id\tprojectId")"
+[[ "$(global_state_value "$global_state" "local-projects\t$ungrouped_import_project_id\tname")" == "旧 Mac 导入聊天（$old_computer_name）" ]] || {
+  print -u2 -- 'Ungrouped old thread was not collected into its own project'
+  exit 1
+}
+old_order="$(global_state_value "$global_state" "sidebar-project-thread-orders\t$old_import_project_id\tthreadIds")"
+print -r -- "$old_order" | /usr/bin/grep -Fq -- "$old_id" || { print -u2 -- 'Imported project order lacks the old thread'; exit 1; }
+print -r -- "$old_order" | /usr/bin/grep -Fq -- "$fork_id" || { print -u2 -- 'Imported project order lacks the fork'; exit 1; }
+ungrouped_order="$(global_state_value "$global_state" "sidebar-project-thread-orders\t$ungrouped_import_project_id\tthreadIds")"
+print -r -- "$ungrouped_order" | /usr/bin/grep -Fq -- "$archived_id" || { print -u2 -- 'Ungrouped project order lacks the old thread'; exit 1; }
+
 for session in "$new_home/.codex/sessions"/**/*.jsonl(N) "$new_home/.codex/archived_sessions"/**/*.jsonl(N); do
   first="$test_root/first-$RANDOM.json"
   /usr/bin/head -n 1 "$session" > "$first"
@@ -266,10 +342,19 @@ conflicts=("$new_home/Documents/不怕codex罢工"/恢复冲突-*.zip(N))
 
 run_restore "$new_home" "$archive" >/dev/null
 [[ "$(/usr/bin/sqlite3 "$state" 'SELECT COUNT(*) FROM threads;')" == 6 ]] || { print -u2 -- 'Repeated restore was not idempotent'; exit 1; }
+[[ "$(global_state_value "$global_state" "thread-project-assignments\t$old_id\tprojectId")" == "$old_import_project_id" ]] || {
+  print -u2 -- 'Repeated restore changed the imported project assignment'
+  exit 1
+}
+[[ "$(global_state_value "$global_state" "local-projects\t$old_import_project_id\tname")" == "旧项目（$old_computer_name）" ]] || {
+  print -u2 -- 'Repeated restore duplicated the imported project'
+  exit 1
+}
 safety=("$new_home/Documents/不怕codex罢工"/恢复前安全备份-*.zip(N))
 (( ${#safety[@]} == 1 )) || { print -u2 -- 'Safety retention did not keep one archive'; exit 1; }
 
 failure_auth_hash="$(/usr/bin/shasum -a 256 "$failure_home/.codex/auth.json" | /usr/bin/awk '{print $1}')"
+failure_global_hash="$(/usr/bin/shasum -a 256 "$failure_home/.codex/.codex-global-state.json" | /usr/bin/awk '{print $1}')"
 set +e
 CODEX_RESTORE_FAIL_AT=after-state-replace run_restore "$failure_home" "$archive" >/dev/null 2>&1
 failure_rc=$?
@@ -277,6 +362,7 @@ set -e
 (( failure_rc == 98 )) || { print -u2 -- "Expected injected failure 98, got $failure_rc"; exit 1; }
 [[ "$(/usr/bin/sqlite3 "$failure_home/.codex/state_5.sqlite" 'SELECT COUNT(*) FROM threads;')" == 3 ]] || { print -u2 -- 'Rollback did not restore state database'; exit 1; }
 [[ "$failure_auth_hash" == "$(/usr/bin/shasum -a 256 "$failure_home/.codex/auth.json" | /usr/bin/awk '{print $1}')" ]] || { print -u2 -- 'Failure changed auth.json'; exit 1; }
+[[ "$failure_global_hash" == "$(/usr/bin/shasum -a 256 "$failure_home/.codex/.codex-global-state.json" | /usr/bin/awk '{print $1}')" ]] || { print -u2 -- 'Rollback did not restore project layout'; exit 1; }
 [[ ! -e "$failure_home/.codex/sessions/2026/01/01/rollout-old-$old_id.jsonl" ]] || { print -u2 -- 'Rollback left an imported session'; exit 1; }
 
 bad_archive="$test_root/bad.zip"

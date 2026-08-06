@@ -3,8 +3,10 @@ set -euo pipefail
 
 umask 077
 
-readonly VERSION="2.1.0"
+readonly VERSION="2.2.0"
 readonly DEFAULT_BACKUP_ROOT="$HOME/Documents/不怕codex罢工"
+readonly SCRIPT_DIR="${0:A:h}"
+readonly PROJECT_LAYOUT_HELPER="$SCRIPT_DIR/codex_project_layout_macos.js"
 
 archive=""
 codex_home="${CODEX_HOME:-$HOME/.codex}"
@@ -23,6 +25,15 @@ apply_started=false
 restore_succeeded=false
 safety_archive=""
 conflict_archive=""
+original_global_state="__MISSING__"
+stage_global_state=""
+project_layout_map=""
+project_layout_summary=""
+source_global_state=""
+source_cwd_map=""
+source_computer_name="旧 Mac"
+integer project_layout_project_count=0
+integer project_layout_assigned_thread_count=0
 
 typeset -a created_files
 typeset -a replaced_destinations
@@ -70,6 +81,28 @@ column_exists() {
   local table="$2"
   local column="$3"
   sqlite3 -noheader "$database" "SELECT name FROM pragma_table_info($(sql_literal "$table")) WHERE name=$(sql_literal "$column");" | /usr/bin/grep -Fxq -- "$column"
+}
+
+validate_json_object() {
+  local json_path="$1"
+  CODEX_JSON_VALIDATE_PATH="$json_path" /usr/bin/osascript -l JavaScript <<'JXA' >/dev/null
+ObjC.import('Foundation');
+
+const pathValue = $.NSProcessInfo.processInfo.environment.objectForKey($('CODEX_JSON_VALIDATE_PATH'));
+const path = pathValue ? ObjC.unwrap(pathValue) : '';
+const data = $.NSData.dataWithContentsOfFile($(path));
+if (!data) {
+  throw new Error(`Cannot read ${path}`);
+}
+const text = $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding);
+if (!text) {
+  throw new Error(`Cannot decode ${path} as UTF-8`);
+}
+const parsed = JSON.parse(ObjC.unwrap(text));
+if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+  throw new Error(`Expected a JSON object in ${path}`);
+}
+JXA
 }
 
 rollback_changes() {
@@ -167,12 +200,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-for required_command in /usr/bin/bsdtar /usr/bin/unzip /usr/bin/shasum /usr/bin/plutil /usr/bin/sqlite3 /usr/bin/mktemp; do
+for required_command in /usr/bin/bsdtar /usr/bin/unzip /usr/bin/shasum /usr/bin/plutil /usr/bin/sqlite3 /usr/bin/mktemp /usr/bin/osascript; do
   [[ -x "$required_command" ]] || {
     printf '缺少 macOS 系统命令：%s\n' "$required_command" >&2
     exit 1
   }
 done
+[[ -f "$PROJECT_LAYOUT_HELPER" ]] || {
+  printf '找不到项目分组恢复组件，请重新下载完整迁移包。\n' >&2
+  exit 1
+}
 
 choose_archive() {
   /usr/bin/osascript <<'APPLESCRIPT'
@@ -299,6 +336,14 @@ if [[ -f "$manifest" ]]; then
 fi
 old_user_home=""
 [[ "$old_codex_home" == */.codex ]] && old_user_home="${old_codex_home:h}"
+if [[ -f "$manifest" ]]; then
+  source_computer_name="$(/usr/bin/sed -n 's/^Computer name: //p' "$manifest" | /usr/bin/head -n 1)"
+  [[ -n "$source_computer_name" ]] || source_computer_name="$(/usr/bin/sed -n 's/^Host: //p' "$manifest" | /usr/bin/head -n 1)"
+fi
+source_computer_name="${source_computer_name//$'\n'/ }"
+source_computer_name="${source_computer_name//$'\t'/ }"
+source_computer_name="${source_computer_name//$'\r'/ }"
+[[ -n "$source_computer_name" ]] || source_computer_name="旧 Mac"
 
 original_state="$temp_dir/original-state.sqlite"
 stage_state="$temp_dir/stage-state.sqlite"
@@ -515,6 +560,54 @@ source_db_count="$(sqlite3 -noheader "$source_state" 'SELECT COUNT(*) FROM threa
   exit 1
 }
 
+# Codex stores sidebar project membership outside state_5.sqlite. Build it in a
+# separate staged file so it can be validated and replaced with the index state.
+source_cwd_map="$temp_dir/source-thread-cwds.tsv"
+sqlite3 -noheader -separator $'\t' "$source_state" "SELECT id, COALESCE(cwd, '') FROM threads ORDER BY id;" > "$source_cwd_map"
+source_global_state="$extract_root/codex-home/.codex-global-state.json"
+stage_global_state="$temp_dir/stage-global-state.json"
+target_global_state="$codex_home/.codex-global-state.json"
+if [[ -f "$target_global_state" ]]; then
+  validate_json_object "$target_global_state" || {
+    printf '新 Mac 的项目分组状态文件无效，已停止，未修改任何数据。\n' >&2
+    exit 1
+  }
+  original_global_state="$temp_dir/original-global-state.json"
+  cp -p -- "$target_global_state" "$original_global_state"
+  cp -p -- "$original_global_state" "$stage_global_state"
+else
+  printf '{}\n' > "$stage_global_state"
+fi
+if [[ -f "$source_global_state" ]]; then
+  validate_json_object "$source_global_state" || {
+    printf '旧 Mac 的项目分组状态文件无效，已停止，未修改任何数据。\n' >&2
+    exit 1
+  }
+fi
+project_layout_map="$temp_dir/project-layout.tsv"
+project_layout_summary="$temp_dir/project-layout-summary.tsv"
+CODEX_PROJECT_LAYOUT_SOURCE_GLOBAL="$source_global_state" \
+CODEX_PROJECT_LAYOUT_TARGET_GLOBAL="$stage_global_state" \
+CODEX_PROJECT_LAYOUT_IMPORT_MAP="$import_map" \
+CODEX_PROJECT_LAYOUT_SOURCE_CWDS="$source_cwd_map" \
+CODEX_PROJECT_LAYOUT_OUTPUT_MAP="$project_layout_map" \
+CODEX_PROJECT_LAYOUT_SUMMARY="$project_layout_summary" \
+CODEX_PROJECT_LAYOUT_OLD_HOME="$old_user_home" \
+CODEX_PROJECT_LAYOUT_NEW_HOME="$HOME" \
+CODEX_PROJECT_LAYOUT_PROJECTS_ROOT="$projects_root" \
+CODEX_PROJECT_LAYOUT_COMPUTER_NAME="$source_computer_name" \
+  /usr/bin/osascript -l JavaScript "$PROJECT_LAYOUT_HELPER"
+validate_json_object "$stage_global_state" || {
+  printf '合并后的项目分组状态文件无效，未写入新 Mac。\n' >&2
+  exit 1
+}
+project_layout_project_count="$(/usr/bin/awk -F $'\t' '$1 == "projects" { print $2; exit }' "$project_layout_summary")"
+project_layout_assigned_thread_count="$(/usr/bin/awk -F $'\t' '$1 == "assigned_threads" { print $2; exit }' "$project_layout_summary")"
+[[ "$project_layout_project_count" == <-> && "$project_layout_assigned_thread_count" == <-> ]] || {
+  printf '项目分组恢复组件没有返回有效摘要，已停止。\n' >&2
+  exit 1
+}
+
 common_columns() {
   local destination_db="$1"
   local source_db="$2"
@@ -547,7 +640,17 @@ build_threads_merge_sql() {
       rollout_path) expression='m.dest_path' ;;
       model_provider) expression="$(sql_literal "$current_provider")" ;;
       archived) expression='m.archived' ;;
-      cwd|agent_path)
+      cwd)
+        if [[ -n "$old_user_home" ]]; then
+          expression="CASE WHEN substr(s.\"$column\", 1, length($(sql_literal "$old_user_home"))) = $(sql_literal "$old_user_home") THEN $(sql_literal "$HOME") || substr(s.\"$column\", length($(sql_literal "$old_user_home")) + 1) ELSE s.\"$column\" END"
+        else
+          expression="s.\"$column\""
+        fi
+        if (( project_layout_assigned_thread_count > 0 )); then
+          expression="COALESCE((SELECT layout.cwd FROM restore_project_layout AS layout WHERE layout.target_id = m.target_id), $expression)"
+        fi
+        ;;
+      agent_path)
         if [[ -n "$old_user_home" ]]; then
           expression="CASE WHEN substr(s.\"$column\", 1, length($(sql_literal "$old_user_home"))) = $(sql_literal "$old_user_home") THEN $(sql_literal "$HOME") || substr(s.\"$column\", length($(sql_literal "$old_user_home")) + 1) ELSE s.\"$column\" END"
         else
@@ -593,6 +696,10 @@ merge_sql="$temp_dir/merge-state.sql"
   printf 'CREATE TABLE restore_import_map (target_id TEXT PRIMARY KEY, source_id TEXT NOT NULL, dest_path TEXT NOT NULL, archived INTEGER NOT NULL, was_existing INTEGER NOT NULL);\n'
   printf '.mode tabs\n'
   printf '.import "%s" restore_import_map\n' "$import_map"
+  if (( project_layout_assigned_thread_count > 0 )); then
+    printf 'CREATE TABLE restore_project_layout (target_id TEXT PRIMARY KEY, cwd TEXT NOT NULL);\n'
+    printf '.import "%s" restore_project_layout\n' "$project_layout_map"
+  fi
   printf 'ATTACH DATABASE %s AS incoming;\n' "$(sql_literal "$source_state")"
   printf 'BEGIN IMMEDIATE;\n'
   if table_exists "$stage_state" thread_sections && table_exists "$source_state" thread_sections; then
@@ -629,6 +736,9 @@ missing_threads="$(sqlite3 -noheader "$stage_state" 'SELECT COUNT(*) FROM restor
   printf '有 %s 条会话缺少数据库记录，已停止，避免产生不可见聊天。\n' "$missing_threads" >&2
   exit 1
 }
+if (( project_layout_assigned_thread_count > 0 )); then
+  sqlite3 "$stage_state" 'DROP TABLE restore_project_layout;'
+fi
 sqlite3 "$stage_state" 'DROP TABLE restore_import_map;'
 [[ "$(sqlite3 -noheader "$stage_state" 'PRAGMA integrity_check;')" == ok ]] || {
   printf '合并后的聊天数据库未通过完整性检查，未写入新 Mac。\n' >&2
@@ -752,6 +862,8 @@ printf '需要复制的会话文件：%s\n' "$copied_session_count"
 printf '同 ID 分叉副本：%s\n' "$duplicate_session_count"
 printf '复用的已有会话：%s\n' "$reused_session_count"
 printf '重建索引条目：%s\n' "$index_count"
+printf '旧 Mac 名称：%s\n' "$source_computer_name"
+printf '旧 Mac 项目分组：%s 个项目，%s 条导入聊天\n' "$project_layout_project_count" "$project_layout_assigned_thread_count"
 printf '登录凭证：不会迁移\n'
 
 if [[ "$dry_run" == true ]]; then
@@ -765,6 +877,7 @@ rollback_root="$temp_dir/rollback"
 mkdir -p -- "$safety_work/codex-home/memories" "$rollback_root"
 cp -p -- "$original_state" "$safety_work/codex-home/state_5.sqlite"
 [[ -f "$codex_home/session_index.jsonl" ]] && cp -p -- "$codex_home/session_index.jsonl" "$safety_work/codex-home/session_index.jsonl"
+[[ "$original_global_state" != __MISSING__ && -f "$original_global_state" ]] && cp -p -- "$original_global_state" "$safety_work/codex-home/.codex-global-state.json"
 for (( i = 1; i <= ${#original_database_paths[@]}; i++ )); do
   database_path="${original_database_paths[$i]}"
   [[ "$database_path" != __MISSING__ && -f "$database_path" ]] && cp -p -- "$database_path" "$safety_work/codex-home/${destination_database_paths[$i]:t}"
@@ -886,6 +999,9 @@ fi
 
 replace_file "$stage_state" "$codex_home/state_5.sqlite" "$original_state"
 replace_file "$stage_index" "$codex_home/session_index.jsonl"
+if (( project_layout_assigned_thread_count > 0 )); then
+  replace_file "$stage_global_state" "$codex_home/.codex-global-state.json" "$original_global_state"
+fi
 
 [[ "${CODEX_RESTORE_FAIL_AT:-}" == after-state-replace ]] && {
   printf 'Injected restore failure after state replacement.\n' >&2
@@ -908,6 +1024,12 @@ final_thread_count="$(sqlite3 -noheader "$codex_home/state_5.sqlite" 'SELECT COU
   printf '写入后的任务数量不一致，正在回滚。\n' >&2
   exit 1
 }
+if (( project_layout_assigned_thread_count > 0 )); then
+  validate_json_object "$codex_home/.codex-global-state.json" || {
+    printf '写入后的项目分组状态文件无效，正在回滚。\n' >&2
+    exit 1
+  }
+fi
 
 auth_after="__MISSING__"
 config_after="__MISSING__"
@@ -946,6 +1068,9 @@ fi
 
 printf '\n恢复成功。\n'
 printf '合并后任务：%s\n' "$final_thread_count"
+if (( project_layout_assigned_thread_count > 0 )); then
+  printf '已恢复旧 Mac 项目分组：%s 个项目，%s 条导入聊天\n' "$project_layout_project_count" "$project_layout_assigned_thread_count"
+fi
 printf '新增/合并用户文件：%s\n' "$merged_user_files"
 printf '安全回滚包：%s\n' "$safety_archive"
 if [[ -n "$conflict_archive" ]]; then

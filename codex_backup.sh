@@ -3,7 +3,7 @@ set -euo pipefail
 
 umask 077
 
-readonly VERSION="2.1.0"
+readonly VERSION="2.2.0"
 readonly DEFAULT_BACKUP_ROOT="$HOME/Documents/不怕codex罢工"
 readonly INSTALL_ROOT="${CODEX_BACKUP_INSTALL_ROOT:-$HOME/.codex-backup-kit}"
 
@@ -18,6 +18,14 @@ codex_home="${CODEX_HOME:-$HOME/.codex}"
 sqlite_home="${CODEX_SQLITE_HOME:-$codex_home}"
 projects_root="${CODEX_PROJECTS_DIR:-$HOME/Documents/Codex}"
 agents_skills="${AGENTS_SKILLS_DIR:-$HOME/.agents/skills}"
+computer_name="${CODEX_BACKUP_COMPUTER_NAME:-}"
+if [[ -z "$computer_name" ]]; then
+  computer_name="$(/usr/sbin/scutil --get ComputerName 2>/dev/null || true)"
+fi
+[[ -n "$computer_name" ]] || computer_name="$(hostname)"
+computer_name="${computer_name//$'\n'/ }"
+computer_name="${computer_name//$'\r'/ }"
+computer_name="${computer_name//$'\t'/ }"
 
 lock_dir=""
 lock_acquired=false
@@ -170,6 +178,7 @@ if [[ "$dry_run" == true ]]; then
   printf 'Codex home: %s\n' "$codex_home"
   printf 'Projects: %s%s\n' "$projects_root" "$([[ -d "$projects_root" ]] || printf ' (not found)')"
   printf 'Agent skills: %s%s\n' "$agents_skills" "$([[ -d "$agents_skills" ]] || printf ' (not found)')"
+  printf 'Computer name: %s\n' "$computer_name"
   printf 'Include auth.json: %s\n' "$include_auth"
   printf 'Include project dependencies: %s\n\n' "$include_dependencies"
   printf 'Default exclusions: packages, logs databases, plugin/browser caches, temp files\n'
@@ -268,6 +277,7 @@ cat > "$temp_dir/backup-metadata/MANIFEST.txt" <<EOF
 Codex Backup Kit
 Version: $VERSION
 Created: $(date '+%Y-%m-%d %H:%M:%S %Z')
+Computer name: $computer_name
 Host: $(hostname)
 
 Codex home: $codex_home

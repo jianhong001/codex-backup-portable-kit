@@ -7,6 +7,7 @@ script_dir="${0:A:h}"
 source_script="$script_dir/codex_backup.sh"
 source_scheduled_launcher="$script_dir/scheduled-launcher.command"
 source_restore_script="$script_dir/codex_restore_macos.sh"
+source_project_layout_helper="$script_dir/codex_project_layout_macos.js"
 source_export_script="$script_dir/export-to-drive.command"
 install_root="$HOME/.codex-backup-kit"
 install_stage="$HOME/.codex-backup-kit.install.$$"
@@ -36,24 +37,25 @@ trap cleanup EXIT
 trap 'exit 130' INT TERM
 
 [[ -f "$source_script" && -f "$source_scheduled_launcher" \
-  && -f "$source_restore_script" && -f "$source_export_script" \
+  && -f "$source_restore_script" && -f "$source_project_layout_helper" && -f "$source_export_script" \
   && -f "$script_dir/第1步-旧Mac制作迁移包.command" \
   && -f "$script_dir/第2步-新Mac恢复聊天.command" ]] || {
   printf '安装包不完整：找不到 macOS 备份脚本。\n' >&2
   exit 1
 }
 
-printf '正在安装“不怕 Codex 罢工”2.1。\n\n'
+printf '正在安装“不怕 Codex 罢工”2.2。\n\n'
 
 rm -rf -- "$install_stage"
 mkdir -p -- "$install_stage" "$backup_root" "$launch_agents"
 cp -- "$source_script" "$install_stage/codex_backup.sh"
 cp -- "$source_scheduled_launcher" "$install_stage/scheduled-launcher.command"
 cp -- "$source_restore_script" "$install_stage/codex_restore_macos.sh"
+cp -- "$source_project_layout_helper" "$install_stage/codex_project_layout_macos.js"
 cp -- "$source_export_script" "$install_stage/export-to-drive.command"
 cp -- "$script_dir/第1步-旧Mac制作迁移包.command" "$install_stage/第1步-旧Mac制作迁移包.command"
 cp -- "$script_dir/第2步-新Mac恢复聊天.command" "$install_stage/第2步-新Mac恢复聊天.command"
-chmod 700 "$install_stage"/*.command "$install_stage"/*.sh
+chmod 700 "$install_stage"/*.command "$install_stage"/*.sh "$install_stage"/*.js
 /bin/zsh -n "$install_stage/codex_backup.sh"
 /bin/zsh -n "$install_stage/scheduled-launcher.command"
 /bin/zsh -n "$install_stage/codex_restore_macos.sh"

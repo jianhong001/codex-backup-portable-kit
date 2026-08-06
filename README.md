@@ -28,7 +28,7 @@ Default destination:
 
 ## Move to Another Mac or OpenAI Account
 
-The v2.1 Mac workflow is fully offline and needs no Python, Homebrew, or npm:
+The v2.2 Mac workflow is fully offline and needs no Python, Homebrew, or npm:
 
 1. Quit Codex on the old Mac, connect an external drive, and double-click `第1步-旧Mac制作迁移包.command`.
 2. On the new Mac, install Codex, sign in to the new OpenAI account, open Codex once, and quit it completely.
@@ -41,6 +41,8 @@ The restore merges rather than replaces:
 - Imported threads are reassigned to the destination provider and added to the sidebar index.
 - Divergent sessions sharing one thread ID receive a deterministic new ID, so both remain visible without multiplying on repeated imports.
 - Memory documents and SQLite state, goals, skills, projects, attachments, and generated files are merged.
+- Imported threads retain their old Mac project grouping. Each imported project is named `Original Project Name (Old Mac Computer Name)`; the computer name is captured automatically when the transfer archive is made.
+- An existing destination project with the same name remains separate. Old threads without a project are collected in `Old Mac Imported Chats (Old Mac Computer Name)`.
 - The destination `auth.json` and `config.toml` remain byte-for-byte unchanged.
 - A verified pre-restore safety archive is created before writes, and partial writes are rolled back automatically.
 
@@ -79,6 +81,7 @@ If a run fails, the partial ZIP is removed while the previous backup and all sou
 ## What Is Backed Up
 
 - `CODEX_HOME`, defaulting to `~/.codex`
+- local sidebar project definitions and thread-to-project assignments
 - `~/Documents/Codex` or the Windows `Documents\Codex` folder
 - `~/.agents/skills`
 - a manifest describing sources, exclusions, and SQLite handling

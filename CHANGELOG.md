@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.0 - 2026-08-06
+
+- Restore the old Mac sidebar project layout in addition to local threads and session indexes.
+- Keep same-named old and new Mac projects separate by labeling imported projects with the old Mac computer name.
+- Collect old ungrouped threads into a dedicated imported-chat project instead of scattering them in the sidebar.
+- Add the automatically detected computer name to backup manifests for stable project labels.
+- Include the project-layout helper in macOS installations, external-drive transfer folders, and release archives.
+- Extend fixture coverage to validate project preservation, ungrouped-chat collection, dry-run isolation, and global-state rollback.
+
 ## 2.1.0 - 2026-08-06
 
 - Add a fully offline, double-click Mac-to-Mac transfer workflow for external drives.

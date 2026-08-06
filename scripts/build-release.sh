@@ -19,6 +19,7 @@ files=(
   怎么用.md
   codex_backup.sh
   codex_restore_macos.sh
+  codex_project_layout_macos.js
   export-to-drive.command
   scheduled-launcher.command
   install.command
