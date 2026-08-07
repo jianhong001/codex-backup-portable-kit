@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.3.0 - 2026-08-07
+
+- Make external-drive Mac migration data-only: transfer folders now contain only the backup ZIP, SHA-256 file, and plain-text instructions.
+- Run restore only from the already-installed new Mac engine, eliminating repeated external-script security prompts.
+- Let the local restore shortcut skip the redundant merge confirmation while retaining archive verification, Codex-closed checks, safety snapshots, and rollback.
+- Remove legacy restore scripts from an external-drive folder only after a replacement ZIP has been verified.
+- Clear the macOS quarantine attribute from installed local migration entry points.
+- Add fixture coverage for data-only transfer folders, local shortcut restore, and quarantine removal after installation.
+
 ## 2.2.0 - 2026-08-06
 
 - Restore the old Mac sidebar project layout in addition to local threads and session indexes.

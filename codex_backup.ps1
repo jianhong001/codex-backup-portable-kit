@@ -12,7 +12,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$Version = "2.2.0"
+$Version = "2.3.0"
 $Documents = [Environment]::GetFolderPath("MyDocuments")
 $BackupFolderName = -join @([char]0x4E0D, [char]0x6015, "codex", [char]0x7F62, [char]0x5DE5)
 if ([string]::IsNullOrWhiteSpace($Destination)) {

@@ -28,11 +28,11 @@ Default destination:
 
 ## Move to Another Mac or OpenAI Account
 
-The v2.2 Mac workflow is fully offline and needs no Python, Homebrew, or npm:
+The v2.3 Mac workflow is fully offline and needs no Python, Homebrew, or npm:
 
 1. Quit Codex on the old Mac, connect an external drive, and double-click `第1步-旧Mac制作迁移包.command`.
-2. On the new Mac, install Codex, sign in to the new OpenAI account, open Codex once, and quit it completely.
-3. Connect the drive and double-click `第2步-新Mac恢复聊天.command` inside `不怕Codex罢工-迁移到新Mac`.
+2. On the new Mac, install the latest release once, then install Codex, sign in to the new OpenAI account, open Codex once, and quit it completely.
+3. Connect the drive. Do not run anything from it. Instead, double-click the local `第2步-新Mac恢复聊天.command` in `~/Documents/不怕codex罢工` and select the ZIP from the drive.
 4. Reopen Codex after the success message.
 
 The restore merges rather than replaces:
@@ -47,6 +47,8 @@ The restore merges rather than replaces:
 - A verified pre-restore safety archive is created before writes, and partial writes are rolled back automatically.
 
 Only the newest restore safety archive and file-conflict archive are retained.
+
+The external drive contains data only: a ZIP, its SHA-256 file, and plain-text instructions. The local restore shortcut runs only the already-installed engine, skips the redundant merge confirmation, and still verifies the archive, checks that Codex is closed, and creates a rollback archive. macOS may still require one confirmation for the initial downloaded installer; the workflow does not disable system security.
 
 ## Why It Is Lightweight
 

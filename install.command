@@ -21,6 +21,14 @@ legacy_plist="$launch_agents/$legacy_label.plist"
 plist_tmp="$launch_agents/.$label.plist.$$"
 installed=false
 
+clear_quarantine() {
+  local item
+  for item in "$@"; do
+    [[ -e "$item" ]] || continue
+    /usr/bin/xattr -d com.apple.quarantine "$item" >/dev/null 2>&1 || true
+  done
+}
+
 cleanup() {
   local rc=$?
   trap - EXIT INT TERM
@@ -44,7 +52,7 @@ trap 'exit 130' INT TERM
   exit 1
 }
 
-printf '正在安装“不怕 Codex 罢工”2.2。\n\n'
+printf '正在安装“不怕 Codex 罢工”2.3。\n\n'
 
 rm -rf -- "$install_stage"
 mkdir -p -- "$install_stage" "$backup_root" "$launch_agents"
@@ -56,6 +64,7 @@ cp -- "$source_export_script" "$install_stage/export-to-drive.command"
 cp -- "$script_dir/第1步-旧Mac制作迁移包.command" "$install_stage/第1步-旧Mac制作迁移包.command"
 cp -- "$script_dir/第2步-新Mac恢复聊天.command" "$install_stage/第2步-新Mac恢复聊天.command"
 chmod 700 "$install_stage"/*.command "$install_stage"/*.sh "$install_stage"/*.js
+clear_quarantine "$install_stage"/*.command(N) "$install_stage"/*.sh(N) "$install_stage"/*.js(N)
 /bin/zsh -n "$install_stage/codex_backup.sh"
 /bin/zsh -n "$install_stage/scheduled-launcher.command"
 /bin/zsh -n "$install_stage/codex_restore_macos.sh"
@@ -66,6 +75,7 @@ if [[ -d "$install_root" ]]; then
   mv -- "$install_root" "$old_install"
 fi
 mv -- "$install_stage" "$install_root"
+clear_quarantine "$install_root"/*.command(N) "$install_root"/*.sh(N) "$install_root"/*.js(N)
 
 cat > "$plist_tmp" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -124,6 +134,7 @@ for helper in backup-now.command 立即备份-macOS.command 点我立即备份Co
   [[ -f "$script_dir/$helper" ]] && cp -- "$script_dir/$helper" "$backup_root/$helper"
 done
 chmod 700 "$backup_root"/*.command(N) 2>/dev/null || true
+clear_quarantine "$backup_root"/*.command(N)
 
 rm -f -- "$legacy_plist"
 rm -f -- "$backup_root/codex_backup.sh"
@@ -136,6 +147,7 @@ printf '安装完成。\n\n'
 printf '每天 23:50 由 macOS 自动备份，不会启动 Codex，也不会消耗 token。\n'
 printf '备份目录：%s\n' "$backup_root"
 printf '运行日志：%s\n' "$install_root/last-run.log"
+printf '换 Mac 时，请从本机“文稿/不怕codex罢工”运行“第2步”，再选择 U 盘里的 ZIP。\n'
 
 if [[ -t 0 ]]; then
   printf '\n'

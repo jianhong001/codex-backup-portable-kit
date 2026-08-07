@@ -50,15 +50,16 @@ Mac → Mac 已提供离线双击恢复，不需要安装 Python、Homebrew 或 
 2. 插入 U 盘或移动硬盘。
 3. 双击 `第1步-旧Mac制作迁移包.command`，按提示选择硬盘。
 
-硬盘里会生成一个 `不怕Codex罢工-迁移到新Mac` 文件夹，里面已经放好最新 ZIP、SHA-256 和新 Mac 恢复程序。再次制作时，只有新 ZIP 验证成功后才会删除旧 ZIP。
+硬盘里会生成一个 `不怕Codex罢工-迁移到新Mac` 文件夹，里面只有最新 ZIP、SHA-256 和纯文本说明，不包含可执行脚本。再次制作时，只有新 ZIP 验证成功后才会删除旧 ZIP。
 
 ### 新 Mac
 
-1. 安装 Codex，登录新的 OpenAI 账号，至少打开一次 Codex。
-2. 完全退出 Codex App。
-3. 插入硬盘，打开 `不怕Codex罢工-迁移到新Mac` 文件夹。
-4. 双击 `第2步-新Mac恢复聊天.command`。
-5. 显示“恢复成功”后重新打开 Codex。
+1. 从 [Releases](https://github.com/jianhong001/codex-backup-portable-kit/releases/latest) 下载最新版，双击 `安装-macOS.command`。这是唯一可能需要 macOS 确认下载程序的一次。
+2. 安装 Codex，登录新的 OpenAI 账号，至少打开一次 Codex，然后完全退出。
+3. 插入硬盘，但不要运行硬盘里的任何脚本。
+4. 在新 Mac 的 `文稿/不怕codex罢工` 文件夹，双击本机的 `第2步-新Mac恢复聊天.command`。
+5. 在文件选择框中选中 U 盘 `不怕Codex罢工-迁移到新Mac` 文件夹里的 ZIP。
+6. 显示“恢复成功”后重新打开 Codex。
 
 恢复采用合并方式：
 
@@ -72,6 +73,8 @@ Mac → Mac 已提供离线双击恢复，不需要安装 Python、Homebrew 或 
 - `auth.json`、Cookie、旧账号登录状态和旧 `config.toml` 不会写入新 Mac。
 
 写入前程序会创建“恢复前安全备份”，任何中途失败都会自动回滚。安全备份和文件冲突包都只保留最新一份。
+
+这样做不会关闭 macOS 的安全保护：首次安装和第一次允许“终端”访问“文稿”仍由系统决定；但每次迁移都不再运行 U 盘里的外来脚本，也不再出现额外的“开始合并”确认。
 
 ## 会保存什么
 

@@ -1,27 +1,18 @@
 #!/bin/zsh
 set -euo pipefail
 
-script_dir="${0:A:h}"
 installed="$HOME/.codex-backup-kit/codex_restore_macos.sh"
-packaged="$script_dir/codex_restore_macos.sh"
 
-if [[ -f "$packaged" ]]; then
-  engine="$packaged"
-elif [[ -f "$installed" ]]; then
+if [[ -f "$installed" ]]; then
   engine="$installed"
 else
-  printf '找不到恢复程序，请把本文件和 codex_restore_macos.sh 放在同一文件夹。\n' >&2
+  printf '为了避免反复审核 U 盘里的外来脚本，请先在新 Mac 安装“不怕 Codex 罢工”。\n' >&2
+  printf '安装后，请从“文稿/不怕codex罢工”运行本机的“第2步-新Mac恢复聊天.command”。\n' >&2
   exit 1
 fi
 
-archives=("$script_dir"/codex-local-backup-*.zip(N.om))
-args=()
-if (( ${#archives[@]} > 0 )); then
-  args+=(--archive "${archives[1]}")
-fi
-
 set +e
-/bin/zsh "$engine" "${args[@]}" "$@"
+/bin/zsh "$engine" --yes "$@"
 rc=$?
 set -e
 

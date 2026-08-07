@@ -3,7 +3,7 @@ set -euo pipefail
 
 umask 077
 
-readonly VERSION="2.2.0"
+readonly VERSION="2.3.0"
 readonly DEFAULT_BACKUP_ROOT="$HOME/Documents/不怕codex罢工"
 readonly INSTALL_ROOT="${CODEX_BACKUP_INSTALL_ROOT:-$HOME/.codex-backup-kit}"
 

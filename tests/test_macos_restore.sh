@@ -4,6 +4,8 @@ set -euo pipefail
 repo_root="${0:A:h:h}"
 backup_script="$repo_root/codex_backup.sh"
 restore_script="$repo_root/codex_restore_macos.sh"
+restore_wrapper="$repo_root/第2步-新Mac恢复聊天.command"
+project_layout_helper="$repo_root/codex_project_layout_macos.js"
 export_script="$repo_root/export-to-drive.command"
 test_root="$(mktemp -d "${TMPDIR:-/tmp}/codex-restore-test.XXXXXX")"
 trap 'rm -rf -- "$test_root"' EXIT
@@ -226,6 +228,30 @@ run_restore() {
     /bin/zsh "$restore_script" --archive "$archive" --yes "$@"
 }
 
+install_local_restore_entry() {
+  local home="$1"
+  local install_dir="$home/.codex-backup-kit"
+  local backup_dir="$home/Documents/不怕codex罢工"
+  mkdir -p -- "$install_dir" "$backup_dir"
+  cp -p -- "$restore_script" "$install_dir/codex_restore_macos.sh"
+  cp -p -- "$project_layout_helper" "$install_dir/codex_project_layout_macos.js"
+  cp -p -- "$restore_wrapper" "$backup_dir/第2步-新Mac恢复聊天.command"
+  chmod 700 "$install_dir/codex_restore_macos.sh" "$install_dir/codex_project_layout_macos.js" "$backup_dir/第2步-新Mac恢复聊天.command"
+  printf '%s' "$backup_dir/第2步-新Mac恢复聊天.command"
+}
+
+run_local_restore_entry() {
+  local home="$1"
+  local entry="$2"
+  shift 2
+  HOME="$home" \
+  CODEX_HOME="$home/.codex" \
+  CODEX_PROJECTS_DIR="$home/Documents/Codex" \
+  AGENTS_SKILLS_DIR="$home/.agents/skills" \
+  CODEX_BACKUP_ROOT="$home/Documents/不怕codex罢工" \
+    /bin/zsh "$entry" "$@"
+}
+
 old_home="$test_root/旧 Mac"
 new_home="$test_root/新 Mac"
 failure_home="$test_root/失败恢复 Mac"
@@ -234,6 +260,11 @@ create_old_home "$old_home"
 create_new_home "$new_home"
 create_new_home "$failure_home"
 mkdir -p -- "$archive_root"
+legacy_transfer_folder="$archive_root/不怕Codex罢工-迁移到新Mac"
+mkdir -p -- "$legacy_transfer_folder"
+printf 'legacy restore engine\n' > "$legacy_transfer_folder/codex_restore_macos.sh"
+printf 'legacy project helper\n' > "$legacy_transfer_folder/codex_project_layout_macos.js"
+printf 'legacy wrapper\n' > "$legacy_transfer_folder/第2步-新Mac恢复聊天.command"
 
 HOME="$old_home" \
 CODEX_HOME="$old_home/.codex" \
@@ -245,10 +276,15 @@ CODEX_BACKUP_COMPUTER_NAME="$old_computer_name" \
   /bin/zsh "$export_script" --dest "$archive_root" --yes >/dev/null
 
 transfer_folder="$archive_root/不怕Codex罢工-迁移到新Mac"
-[[ -x "$transfer_folder/第2步-新Mac恢复聊天.command" ]] || { print -u2 -- 'Portable restore wrapper is missing'; exit 1; }
-[[ -x "$transfer_folder/codex_restore_macos.sh" ]] || { print -u2 -- 'Portable restore engine is missing'; exit 1; }
-[[ -x "$transfer_folder/codex_project_layout_macos.js" ]] || { print -u2 -- 'Portable project-layout helper is missing'; exit 1; }
 [[ -f "$transfer_folder/新Mac怎么恢复.txt" ]] || { print -u2 -- 'Portable instructions are missing'; exit 1; }
+if find "$transfer_folder" -maxdepth 1 -type f \( -name '*.command' -o -name '*.sh' -o -name '*.js' \) -print -quit | /usr/bin/grep -q .; then
+  print -u2 -- 'Transfer folder still contains executable files'
+  exit 1
+fi
+/usr/bin/grep -Fq '不包含、也不需要运行任何脚本' "$transfer_folder/新Mac怎么恢复.txt" || {
+  print -u2 -- 'Portable instructions do not explain the data-only transfer'
+  exit 1
+}
 archives=("$transfer_folder"/codex-local-backup-*.zip(N))
 (( ${#archives[@]} == 1 )) || { print -u2 -- 'Expected one source archive'; exit 1; }
 archive="${archives[1]}"
@@ -257,6 +293,9 @@ archive="${archives[1]}"
   print -u2 -- 'Source computer name is missing from the manifest'
   exit 1
 }
+
+local_restore_entry="$(install_local_restore_entry "$new_home")"
+run_local_restore_entry "$new_home" "$local_restore_entry" --archive "$archive" --dry-run >/dev/null
 
 dry_run_global_hash="$(/usr/bin/shasum -a 256 "$new_home/.codex/.codex-global-state.json" | /usr/bin/awk '{print $1}')"
 run_restore "$new_home" "$archive" --dry-run >/dev/null

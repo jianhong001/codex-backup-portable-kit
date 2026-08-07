@@ -3,7 +3,7 @@ set -euo pipefail
 
 umask 077
 
-readonly VERSION="2.2.0"
+readonly VERSION="2.3.0"
 readonly DEFAULT_BACKUP_ROOT="$HOME/Documents/不怕codex罢工"
 readonly SCRIPT_DIR="${0:A:h}"
 readonly PROJECT_LAYOUT_HELPER="$SCRIPT_DIR/codex_project_layout_macos.js"

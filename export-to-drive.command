@@ -63,18 +63,6 @@ backup_script="$(find_component codex_backup.sh)" || {
   printf '找不到备份引擎，请重新运行安装程序。\n' >&2
   exit 1
 }
-restore_script="$(find_component codex_restore_macos.sh)" || {
-  printf '找不到恢复引擎，请下载完整安装包。\n' >&2
-  exit 1
-}
-project_layout_helper="$(find_component codex_project_layout_macos.js)" || {
-  printf '找不到项目分组恢复组件，请重新运行安装程序。\n' >&2
-  exit 1
-}
-restore_wrapper="$(find_component 第2步-新Mac恢复聊天.command)" || {
-  printf '找不到新 Mac 恢复入口，请下载完整安装包。\n' >&2
-  exit 1
-}
 
 codex_home="${CODEX_HOME:-$HOME/.codex}"
 db_open_targets=()
@@ -124,23 +112,6 @@ printf '正在制作迁移包，请不要拔出硬盘。\n'
 printf '保存位置：%s\n\n' "$transfer_folder"
 /bin/zsh "$backup_script" --dest "$transfer_folder" --keep 1
 
-cp -p -- "$restore_script" "$transfer_folder/codex_restore_macos.sh"
-cp -p -- "$project_layout_helper" "$transfer_folder/codex_project_layout_macos.js"
-cp -p -- "$restore_wrapper" "$transfer_folder/第2步-新Mac恢复聊天.command"
-chmod 700 "$transfer_folder/codex_restore_macos.sh" "$transfer_folder/codex_project_layout_macos.js" "$transfer_folder/第2步-新Mac恢复聊天.command"
-/usr/bin/xattr -d com.apple.quarantine "$transfer_folder/codex_restore_macos.sh" "$transfer_folder/codex_project_layout_macos.js" "$transfer_folder/第2步-新Mac恢复聊天.command" >/dev/null 2>&1 || true
-
-cat > "$transfer_folder/新Mac怎么恢复.txt" <<'EOF'
-1. 在新 Mac 安装 Codex，登录新 OpenAI 账号，至少打开一次 Codex。
-2. 完全退出 Codex App。
-3. 插入这个 U 盘，双击“第2步-新Mac恢复聊天.command”。
-4. 恢复成功后重新打开 Codex。
-
-恢复采用合并方式：新旧聊天都会保留；memory、skills 和项目也会合并。
-旧 Mac 的聊天会按原项目归类；同名项目会加上旧 Mac 电脑名，保持独立。
-不会复制旧账号的 auth.json、Cookie 或登录状态。
-EOF
-
 archive=("$transfer_folder"/codex-local-backup-*.zip(N.om[1]))
 (( ${#archive[@]} == 1 )) || {
   printf '迁移包生成后未找到 ZIP，请不要拔出硬盘。\n' >&2
@@ -151,10 +122,29 @@ archive=("$transfer_folder"/codex-local-backup-*.zip(N.om[1]))
   exit 1
 }
 
+for legacy_component in codex_restore_macos.sh codex_project_layout_macos.js 第2步-新Mac恢复聊天.command; do
+  rm -f -- "$transfer_folder/$legacy_component"
+done
+
+cat > "$transfer_folder/新Mac怎么恢复.txt" <<'EOF'
+这个 U 盘迁移包只包含聊天数据 ZIP 和 SHA-256 校验文件，不包含、也不需要运行任何脚本。
+
+1. 在新 Mac 下载最新版“不怕 Codex 罢工”并双击“安装-macOS.command”：
+   https://github.com/jianhong001/codex-backup-portable-kit/releases/latest
+2. 登录 Codex，至少打开一次，然后完全退出 Codex App。
+3. 插入这个 U 盘。
+4. 在新 Mac 的“文稿/不怕codex罢工”文件夹，双击本机的“第2步-新Mac恢复聊天.command”。
+5. 在弹出的文件选择框里，选择这个文件夹中的 codex-local-backup-*.zip。
+6. 显示“恢复成功”后重新打开 Codex。
+
+首次安装时 macOS 可能要求确认一次下载的安装程序。安装完成后，迁移时不会再执行 U 盘里的外来脚本。
+恢复会验证 ZIP 和 SHA-256、检查 Codex 已退出、创建安全回滚包；不会复制旧账号的 auth.json、Cookie 或登录状态。
+EOF
+
 printf '\n迁移包制作成功。\n'
 printf '文件夹：%s\n' "$transfer_folder"
 printf 'ZIP：%s\n' "${archive[1]}"
-printf '下一步：把硬盘接到新 Mac，双击“第2步-新Mac恢复聊天.command”。\n'
+printf '下一步：把硬盘接到新 Mac，在新 Mac 本机运行“第2步-新Mac恢复聊天.command”并选择这个 ZIP。\n'
 
 [[ "$assume_yes" == true ]] || /usr/bin/open "$transfer_folder"
 

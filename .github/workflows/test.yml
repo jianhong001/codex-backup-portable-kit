@@ -17,6 +17,7 @@ jobs:
       - name: Run macOS fixture tests
         run: |
           zsh tests/test_macos.sh
+          zsh tests/test_macos_install.sh
           zsh tests/test_macos_restore.sh
 
   windows:
