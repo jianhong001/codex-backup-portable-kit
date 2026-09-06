@@ -25,7 +25,10 @@ jobs:
           zsh scripts/build-release.sh
           archive="dist/codex-backup-kit-v$(< VERSION).zip"
           unzip -tq "$archive"
-          ! unzip -Z1 "$archive" | rg -i '(^|/)(auth\.json|.*\.sqlite|.*\.log|codex-local-backup-)'
+          unzip -Z1 "$archive" > dist/archive-entries.txt
+          scan_status=0
+          /usr/bin/grep -Ei '(^|/)(auth\.json|.*\.sqlite|.*\.log|codex-local-backup-)' dist/archive-entries.txt || scan_status=$?
+          test "$scan_status" -eq 1
 
   windows:
     runs-on: windows-latest

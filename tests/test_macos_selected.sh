@@ -64,13 +64,19 @@ archive="${archives[1]}"
 mkdir "$root/check"
 bsdtar -xf "$archive" -C "$root/check"
 [[ "$(sqlite3 "$root/check/backup-metadata/sqlite-consistent-snapshots/state_5.sqlite" 'SELECT count(*) FROM threads')" == 1 ]]
-! rg -a -q 'UNSELECTED_CHAT_PRIVATE_SENTINEL|REMOTE_SECRET_SENTINEL|GLOBAL_SECRET_SENTINEL|SECRET_ENV' "$root/check"
+assert_no_match() {
+  local result=0
+  /usr/bin/grep "$@" || result=$?
+  [[ $result == 1 ]] || { print -u2 'Unexpected match or failed content check'; exit 1; }
+}
+assert_no_match -arEq 'UNSELECTED_CHAT_PRIVATE_SENTINEL|REMOTE_SECRET_SENTINEL|GLOBAL_SECRET_SENTINEL|SECRET_ENV' "$root/check"
 [[ "$(shasum -a 256 "$old/.codex/state_5.sqlite")" == "$old_hash" ]]
-! bsdtar -tf "$archive" | rg 'node_modules|/\.env$|linked-file'
+bsdtar -tf "$archive" > "$root/archive-entries.txt"
+assert_no_match -E 'node_modules|/\.env$|linked-file' "$root/archive-entries.txt"
 
 before="$(sqlite3 "$new/.codex/state_5.sqlite" .dump | shasum -a 256)"
 CODEX_RESTORE_FAIL_AT=after-state-replace restore_selected > "$root/rollback.log" 2>&1 && { print -u2 'Expected rollback failure'; exit 1; }
-rg -q 'Injected restore failure after state replacement' "$root/rollback.log" || { cat "$root/rollback.log"; exit 1; }
+/usr/bin/grep -q 'Injected restore failure after state replacement' "$root/rollback.log" || { cat "$root/rollback.log"; exit 1; }
 [[ "$(sqlite3 "$new/.codex/state_5.sqlite" .dump | shasum -a 256)" == "$before" ]] || { cat "$root/rollback.log"; exit 1; }
 [[ ! -f "$new/.codex/.codex-global-state.json" ]]
 restore_selected > "$root/import.log" 2>&1 || { cat "$root/import.log"; exit 1; }
@@ -83,13 +89,13 @@ imported_cwd="$(sqlite3 "$new/.codex/state_5.sqlite" "SELECT cwd FROM threads WH
 [[ -f "$imported_cwd/main.txt" && -f "$imported_cwd/a[1]?.txt" ]]
 [[ "$(sqlite3 "$new/.codex/state_5.sqlite" 'SELECT count(*) FROM projects')" == 1 ]]
 session="$(sqlite3 "$new/.codex/state_5.sqlite" "SELECT rollout_path FROM threads WHERE id='$imported'")"
-! rg -q "$old/work" "$session"
+assert_no_match -Fq "$old/work" "$session"
 printf 'local edits\n' > "$imported_cwd/main.txt"
 printf '{"type":"response_item","payload":{"text":"NEW_MAC_CONTINUATION"}}\n' >> "$session"
 restore_selected > "$root/repeat.log" 2>&1 || { cat "$root/repeat.log"; exit 1; }
 [[ "$(sqlite3 "$new/.codex/state_5.sqlite" 'SELECT count(*) FROM threads')" == 2 ]]
 [[ "$(cat "$imported_cwd/main.txt")" == 'local edits' ]]
-rg -q NEW_MAC_CONTINUATION "$session"
+/usr/bin/grep -q NEW_MAC_CONTINUATION "$session"
 
 archive_hash="$(shasum -a 256 "$archive")"
 CODEX_COMMON_TEST_AVAILABLE_BYTES=0 export_selected --thread "$id1" > "$root/space.log" 2>&1 && { print -u2 'Expected space failure'; exit 1; }
