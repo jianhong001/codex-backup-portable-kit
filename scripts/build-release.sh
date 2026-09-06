@@ -12,14 +12,19 @@ mkdir -p -- "$temp_root/$package_name" "${output:h}"
 
 files=(
   LICENSE
+  CHANGELOG.md
   README.md
   README.zh-CN.md
   SECURITY.md
   VERSION
   怎么用.md
   codex_backup.sh
+  codex_macos_common.sh
   codex_restore_macos.sh
   codex_project_layout_macos.js
+  codex_transfer_macos.sh
+  codex_selected_macos.js
+  转移选定聊天-macOS.command
   export-to-drive.command
   scheduled-launcher.command
   install.command
@@ -49,7 +54,10 @@ for file in "${files[@]}"; do
   cp -- "$repo_root/$file" "$temp_root/$package_name/$file"
 done
 
-chmod 755 "$temp_root/$package_name"/*.command "$temp_root/$package_name/codex_backup.sh"
+mkdir -p -- "$temp_root/$package_name/skills/codex-local-transfer"
+cp -- "$repo_root/skills/codex-local-transfer/SKILL.md" "$temp_root/$package_name/skills/codex-local-transfer/SKILL.md"
+
+chmod 755 "$temp_root/$package_name"/*.command "$temp_root/$package_name"/*.sh "$temp_root/$package_name"/*.js
 rm -f -- "$output"
 (rm -f -- "${output}.sha256")
 (cd "$temp_root" && /usr/bin/zip -qry "$output" "$package_name")

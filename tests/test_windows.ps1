@@ -65,6 +65,14 @@ function Get-ZipEntryText {
     }
 }
 
+function Get-FormalArchives {
+    param([string]$Destination)
+    return @(
+        Get-ChildItem -LiteralPath $Destination -Filter "codex-local-backup-*.zip" -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notlike "*.partial.zip" }
+    )
+}
+
 function Assert-True {
     param([bool]$Condition, [string]$Message)
     if (-not $Condition) { throw $Message }
@@ -76,16 +84,24 @@ try {
     New-FixtureFile (Join-Path $CodexHome "memories\note.md") "memory"
     New-FixtureFile (Join-Path $CodexHome "skills\example\SKILL.md") "skill"
     New-FixtureFile (Join-Path $CodexHome "auth.json") "token"
+    New-FixtureFile (Join-Path $CodexHome "config.toml") "provider = secret"
+    New-FixtureFile (Join-Path $CodexHome ".env") "env-secret"
+    New-FixtureFile (Join-Path $CodexHome "private.pem") "private-key"
+    New-FixtureFile (Join-Path $CodexHome "credentials") "credential-record"
     New-FixtureFile (Join-Path $CodexHome "packages\standalone\codex.exe") "package"
     New-FixtureFile (Join-Path $CodexHome "plugins\cache\plugin.bin") "cache"
     New-FixtureFile (Join-Path $CodexHome "logs_2.sqlite") "log"
     New-FixtureFile (Join-Path $CodexHome "state_5.sqlite") "raw-state"
     New-FixtureFile (Join-Path (Join-Path $CodexHome "generated_images") $UnicodeImageName) "image"
     New-FixtureFile (Join-Path $Projects "app\source.txt") "source"
+    New-FixtureFile (Join-Path $Projects "app\.env") "project-secret"
+    New-FixtureFile (Join-Path $Projects "app\.git\config") "remote-secret"
     New-FixtureFile (Join-Path $Projects "app\.venv\dependency.bin") "python-dependency"
     New-FixtureFile (Join-Path $Projects "app\node_modules\pkg\index.js") "node-dependency"
     New-FixtureFile (Join-Path $Projects "app\output\result.txt") "generated-output"
     New-FixtureFile (Join-Path $AgentsSkills "example\SKILL.md") "agent-skill"
+    New-FixtureFile (Join-Path $AgentsSkills "example\.env") "agent-secret"
+    New-FixtureFile (Join-Path $AgentsSkills "example\private.key") "agent-private-key"
 
     $DryDestination = Join-Path $TestRoot "dry-run"
     $Exit = Invoke-Backup -Destination $DryDestination -ExtraArguments @("-DryRun")
@@ -119,11 +135,19 @@ try {
     }
     foreach ($Unexpected in @(
         "codex-home/auth.json",
+        "codex-home/config.toml",
+        "codex-home/.env",
+        "codex-home/private.pem",
+        "codex-home/credentials",
         "codex-home/packages/standalone/codex.exe",
         "codex-home/plugins/cache/plugin.bin",
         "codex-home/logs_2.sqlite",
+        "projects/app/.env",
+        "projects/app/.git/config",
         "projects/app/.venv/dependency.bin",
-        "projects/app/node_modules/pkg/index.js"
+        "projects/app/node_modules/pkg/index.js",
+        "agents-skills/example/.env",
+        "agents-skills/example/private.key"
     )) {
         Assert-True (-not ($Entries -contains $Unexpected)) "Unexpected archive entry: $Unexpected"
     }
@@ -142,6 +166,25 @@ try {
     Assert-True ($FullEntries -contains "codex-home/auth.json") "IncludeAuth did not include auth.json"
     Assert-True ($FullEntries -contains "projects/app/.venv/dependency.bin") "Dependencies were not included"
     Assert-True ($FullEntries -contains "projects/app/node_modules/pkg/index.js") "node_modules was not included"
+    Assert-True (-not ($FullEntries -contains "codex-home/config.toml")) "IncludeAuth included config.toml"
+
+    # The final ZIP is published only after its checksum. A hard crash before
+    # that final rename must leave the previous complete archive untouched.
+    $CrashDestination = Join-Path $TestRoot "crash-recovery"
+    $Exit = Invoke-Backup -Destination $CrashDestination
+    Assert-True ($Exit -eq 0) "Initial crash-recovery backup failed"
+    Start-Sleep -Seconds 1
+    $env:CODEX_BACKUP_TEST_CRASH_AT = "after-sidecar-publish"
+    $CrashExit = Invoke-Backup -Destination $CrashDestination
+    $env:CODEX_BACKUP_TEST_CRASH_AT = ""
+    Assert-True ($CrashExit -ne 0) "Expected injected hard crash"
+    Assert-True ((Get-FormalArchives -Destination $CrashDestination).Count -eq 1) "Interrupted publish produced a formal ZIP"
+    Assert-True (@(Get-ChildItem -LiteralPath $CrashDestination -Filter "*.partial.zip" -File).Count -eq 1) "Expected an interrupted temporary ZIP"
+    $Exit = Invoke-Backup -Destination $CrashDestination
+    Assert-True ($Exit -eq 0) "Post-crash backup failed"
+    $CrashArchives = Get-FormalArchives -Destination $CrashDestination
+    Assert-True ($CrashArchives.Count -eq 1) "Interrupted publish was counted as a successful backup"
+    Assert-True (Test-Path -LiteralPath "$($CrashArchives[0].FullName).sha256") "Post-crash backup is missing a checksum"
 
     $FailureDestination = Join-Path $TestRoot "failure"
     New-FixtureFile (Join-Path $FailureDestination "codex-local-backup-2000-01-01-000000.zip") "old-backup"

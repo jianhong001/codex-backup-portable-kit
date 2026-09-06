@@ -13,12 +13,19 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Check zsh syntax
-        run: zsh -n codex_backup.sh install.command backup-now.command uninstall.command *.command
+        run: zsh -n codex_macos_common.sh codex_backup.sh codex_restore_macos.sh scheduled-launcher.command install.command backup-now.command uninstall.command export-to-drive.command *.command scripts/build-release.sh
       - name: Run macOS fixture tests
         run: |
           zsh tests/test_macos.sh
           zsh tests/test_macos_install.sh
           zsh tests/test_macos_restore.sh
+          zsh tests/test_macos_selected.sh
+      - name: Build and inspect portable release
+        run: |
+          zsh scripts/build-release.sh
+          archive="dist/codex-backup-kit-v$(< VERSION).zip"
+          unzip -tq "$archive"
+          ! unzip -Z1 "$archive" | rg -i '(^|/)(auth\.json|.*\.sqlite|.*\.log|codex-local-backup-)'
 
   windows:
     runs-on: windows-latest
@@ -28,7 +35,7 @@ jobs:
         shell: powershell
         run: |
           $failed = $false
-          Get-ChildItem -Path . -Filter *.ps1 | ForEach-Object {
+          Get-ChildItem -Path . -Filter *.ps1 -Recurse | ForEach-Object {
             $tokens = $null
             $errors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors)

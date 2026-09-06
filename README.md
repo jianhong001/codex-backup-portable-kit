@@ -4,100 +4,89 @@
 [![Release](https://img.shields.io/github/v/release/jianhong001/codex-backup-portable-kit)](https://github.com/jianhong001/codex-backup-portable-kit/releases/latest)
 [![License](https://img.shields.io/github/license/jianhong001/codex-backup-portable-kit)](LICENSE)
 
-**Zero-token, low-disk local backups for OpenAI Codex on macOS and Windows, with offline Mac-to-Mac history migration.**
+**A zero-token local backup for Codex. Runs at 23:50, streams directly to ZIP, and retains only the newest verified archive.**
 
-Codex Backup Kit preserves local sessions, memories, skills, settings, generated files, and project workspaces every night at 23:50. It uses the operating system scheduler, not a Codex automation, so scheduled runs do not call a model or consume tokens.
+It is built for the practical problem behind switching computers, accounts, or providers: local conversations, memory, skills, generated files, and project work should remain recoverable even when Codex history is no longer visible in the sidebar.
 
 [中文说明](README.zh-CN.md)
 
-## Quick Start
+## Start Here
 
-Download the [latest release](https://github.com/jianhong001/codex-backup-portable-kit/releases/latest), unzip it, then run one file:
+**Moving just one project or conversation between Macs?** Open `转移选定聊天-macOS.command` in the extracted kit. Select export on the old Mac, then import on the new Mac. Transfer one ZIP, with no scheduled-backup installation or pairing code. Includes selected history and actual project folders, not global memory/skills or other chats. See [the quick guide](怎么用.md) for exclusions and compatibility limits. This is a source-tree addition, not a claim that the latest published release already includes it.
 
-| Platform | Installer |
+For nightly whole-machine backups:
+
+1. Download the [latest release](https://github.com/jianhong001/codex-backup-portable-kit/releases/latest) and unzip it.
+2. Run one installer once.
+
+| Platform | Run |
 | --- | --- |
 | macOS | Double-click `安装-macOS.command` |
 | Windows | Double-click `安装-Windows.cmd` |
 
-The installer creates a daily 23:50 system task and keeps only the newest successful backup.
+After installation, the operating system runs the backup every day at 23:50. It does not start Codex, call a model, or consume tokens.
 
 Default destination:
 
 - macOS: `~/Documents/不怕codex罢工`
 - Windows: `Documents\不怕codex罢工`
 
-## Move to Another Mac or OpenAI Account
+The new archive is checked before it becomes official. A failed run never deletes source data or the last verified archive.
 
-The v2.3 Mac workflow is fully offline and needs no Python, Homebrew, or npm:
+## What It Backs Up
 
-1. Quit Codex on the old Mac, connect an external drive, and double-click `第1步-旧Mac制作迁移包.command`.
-2. On the new Mac, install the latest release once, then install Codex, sign in to the new OpenAI account, open Codex once, and quit it completely.
-3. Connect the drive. Do not run anything from it. Instead, double-click the local `第2步-新Mac恢复聊天.command` in `~/Documents/不怕codex罢工` and select the ZIP from the drive.
-4. Reopen Codex after the success message.
+- Local Codex session JSONL files, sidebar index, SQLite state, memory, and skills
+- `Documents/Codex` project files, documents, output, and Git history
+- Shared agent skills in `~/.agents/skills`
+- Generated images, attachments, automations, visualizations, and similar local user material
 
-The restore merges rather than replaces:
+Default exclusions keep routine backups smaller and safer:
 
-- Existing destination threads remain intact.
-- Imported threads are reassigned to the destination provider and added to the sidebar index.
-- Divergent sessions sharing one thread ID receive a deterministic new ID, so both remain visible without multiplying on repeated imports.
-- Memory documents and SQLite state, goals, skills, projects, attachments, and generated files are merged.
-- Imported threads retain their old Mac project grouping. Each imported project is named `Original Project Name (Old Mac Computer Name)`; the computer name is captured automatically when the transfer archive is made.
-- An existing destination project with the same name remains separate. Old threads without a project are collected in `Old Mac Imported Chats (Old Mac Computer Name)`.
-- The destination `auth.json` and `config.toml` remain byte-for-byte unchanged.
-- A verified pre-restore safety archive is created before writes, and partial writes are rolled back automatically.
+- `auth.json`, `config.toml`, `.env`, private keys, credential files, Git remotes, cookies, and browser login data
+- Reinstallable Codex packages, large log databases, caches, temporary files, and plugin caches
+- Project dependencies and development caches such as `.venv`, `venv`, `node_modules`, and `__pycache__`
 
-Only the newest restore safety archive and file-conflict archive are retained.
+Use `--include-dependencies` or `-IncludeDependencies` only when needed. `--include-auth` and `-IncludeAuth` are advanced options for ordinary backups; signed Mac migration packages never include account credentials.
 
-The external drive contains data only: a ZIP, its SHA-256 file, and plain-text instructions. The local restore shortcut runs only the already-installed engine, skips the redundant merge confirmation, and still verifies the archive, checks that Codex is closed, and creates a rollback archive. macOS may still require one confirmation for the initial downloaded installer; the workflow does not disable system security.
+## Mac-to-Mac Transfer
 
-## Why It Is Lightweight
+This is an offline local-data merge, not an official OpenAI account migration. It can merge old local history into a newly signed-in Mac when the two local Codex index formats are compatible.
 
-The backup is streamed directly into a temporary ZIP. The previous successful ZIP remains in place while the new one is written and verified, but the script no longer creates a full staging copy of all source data.
+### On the old Mac
 
-On the machine used to develop v2, the selected source set fell from roughly 6 GB to roughly 1.5 GB before compression by skipping reinstallable and transient data. Results vary by machine.
+1. Open `Documents/不怕codex罢工` and double-click `第1步-旧Mac制作迁移包.command`.
+2. Codex is asked to close so the transfer package is consistent.
+3. The package appears in `Documents/不怕codex罢工/迁移包`.
+4. Copy its one `codex-migration-*.zip`, matching `.sha256`, and matching `.signature` to a USB drive or other private transfer method. Keep the displayed pairing code for the first import.
 
-Default exclusions include:
+The drive carries data only. Do not run scripts from it.
 
-- `auth.json`
-- Codex standalone packages and large log databases
-- plugin, browser, computer-use, shell, and temporary caches
-- project `.venv`, `venv`, `node_modules`, `__pycache__`, and common development caches
-- the Codex Chromium profile, which can contain cookies and login data
+### On the new Mac
 
-Generated images, attachments, project source files, project output files, and Git history are not excluded.
+1. Install this release once, sign in to Codex with the destination account, open Codex once, then quit it completely.
+2. Copy the ZIP, `.sha256`, and `.signature` into `Documents/不怕codex罢工/待恢复`. That folder must contain exactly one ZIP.
+3. Double-click the local `第2步-新Mac恢复聊天.command` in `Documents/不怕codex罢工`.
+4. Enter the old Mac pairing code only the first time that old Mac is imported.
 
-## Safety Model
+The restore validates the signed package, checks available disk space and schema compatibility, creates a rollback transaction and a safety archive, merges the data, then creates a new local backup. Only after that new backup verifies successfully are the three files removed from `待恢复`.
 
-Every run follows the same order:
+If two copies of a task share an ID but diverge, both are kept using a stable imported-copy ID. Repeating the same import is idempotent. Old Mac projects stay separate under `旧 Mac 导入项目/<old-device-id>` and retain the old Mac computer name in their sidebar labels. Existing projects on the new Mac are never overwritten.
 
-1. Acquire a single-run lock.
-2. Create consistent SQLite snapshots where the platform provides `sqlite3`.
-3. Stream selected files to `*.partial.zip`.
-4. Read the complete ZIP to verify it.
-5. Generate a SHA-256 checksum.
-6. Promote the new ZIP to the final name.
-7. Delete older archives only after all previous steps succeed.
+The destination `auth.json` and `config.toml` remain unchanged. Cookies, login state, subscriptions, cloud permissions, and server-side data are not transferred.
 
-If a run fails, the partial ZIP is removed while the previous backup and all source files remain untouched.
+## Why It Is Low Impact
 
-## What Is Backed Up
+The archive is written file by file to `*.partial.zip`; there is no full second copy of the source tree. SQLite databases use consistent snapshots when `sqlite3` is available. The final ZIP name is applied only after its checksum sidecar has been written.
 
-- `CODEX_HOME`, defaulting to `~/.codex`
-- local sidebar project definitions and thread-to-project assignments
-- `~/Documents/Codex` or the Windows `Documents\Codex` folder
-- `~/.agents/skills`
-- a manifest describing sources, exclusions, and SQLite handling
+Only the newest valid archive participates in retention. Corrupt or legacy archives are not silently deleted; they are ignored by retention for manual inspection.
 
-Archives use a stable layout:
+Scheduled runs use low priority, overwrite `last-run.log`, and skip rather than overlap an active backup, migration, restore, or installation.
 
-```text
-codex-home/
-projects/
-agents-skills/
-backup-metadata/
-```
+## Windows Scope
 
-## Manual Use
+Windows receives the same zero-token scheduled streaming backup, checksum validation, sensitive-file exclusions, latest-valid retention, and Task Scheduler `StartWhenAvailable` behavior. Automatic merge and sidebar restoration currently support Mac-to-Mac only; Windows archives remain portable local-data backups.
+
+## Manual Commands
 
 macOS:
 
@@ -105,6 +94,7 @@ macOS:
 zsh codex_backup.sh --dry-run
 zsh codex_backup.sh --dest /path/to/backups --keep 1
 zsh codex_backup.sh --include-dependencies
+zsh codex_backup.sh --migration --dest ~/Documents/不怕codex罢工/迁移包
 ```
 
 Windows PowerShell:
@@ -115,44 +105,30 @@ Windows PowerShell:
 .\codex_backup.ps1 -IncludeDependencies
 ```
 
-`--include-auth` and `-IncludeAuth` remain available for advanced use, but archives containing `auth.json` must be treated as credentials.
+## Safety Boundaries
 
-## Scheduling and Notifications
+- Keep real archives private. They may contain conversations, memory, source code, and work documents.
+- Never commit archives or migration packages to a public repository.
+- Treat the optional credential-including backup mode as sensitive. It is not used for migration.
+- This project preserves and restores local files. It cannot promise that OpenAI cloud history, billing, access, or every future Codex schema will migrate.
 
-- macOS uses `launchd` to open an ASCII-only launcher in Terminal, allowing the scheduled run to use the same Documents permission as a manual Terminal run.
-- Windows uses Task Scheduler from `%LOCALAPPDATA%\CodexBackupKit`.
-- Both run at low process priority and prevent overlapping runs.
-- The latest run overwrites `last-run.log`; logs do not grow forever.
-- A local system notification reports success, failure, or a skipped overlapping run.
+See [SECURITY.md](SECURITY.md) for threat boundaries and reporting guidance.
 
-No scheduled run starts Codex or calls an AI model.
+## Verification
 
-macOS may show a one-time request allowing Terminal to access Documents. Approve it so project workspaces can be included.
-
-## Restore Boundary
-
-The Mac-to-Mac workflow merges the current local Codex SQLite, JSONL, and session-index formats so imported tasks can appear in the local sidebar. It does not transfer cloud permissions, subscriptions, remote tasks, or server-side data between OpenAI accounts. Automatic sidebar restoration is not yet provided for Windows or cross-platform Mac/Windows moves.
-
-Provider reconciliation behavior was cross-checked against [codex-history-sync-tool](https://github.com/GODGOD126/codex-history-sync-tool) and [codex-threadripper](https://github.com/Wangnov/codex-threadripper); this project adds offline cross-machine packaging, merge semantics, deterministic conflict copies, and rollback.
-
-## Security
-
-Backups can contain private conversations, memories, source code, and work documents. Keep them private and never commit them to a public repository. See [SECURITY.md](SECURITY.md).
-
-## Development
-
-Fixture tests cover inclusion rules, exclusions, retention, checksums, Unicode names, merge idempotency, provider reconciliation, credential isolation, divergent thread IDs, and failure rollback.
+The fixture suite covers archive content, sensitive-file exclusion, checksum validation, retention, hard-crash recovery, installation rollback, signed pairing, no-overlap locking, schema mismatch refusal, project isolation, symlink refusal, merge idempotency, and rollback.
 
 ```bash
 zsh tests/test_macos.sh
+zsh tests/test_macos_install.sh
 zsh tests/test_macos_restore.sh
 ```
 
-Windows tests run in GitHub Actions with Windows PowerShell 5.1.
+Windows tests run on `windows-latest` in GitHub Actions. The current development Mac does not claim native Windows execution.
 
 ## Star the Project
 
-If Codex has become part of your daily work, a star helps other users find a backup workflow that does not spend tokens just to copy files.
+If Codex is part of your daily work, a star helps other users find a backup workflow that copies local data without spending tokens.
 
 ## License
 

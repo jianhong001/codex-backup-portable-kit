@@ -12,7 +12,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$Version = "2.3.0"
+$Version = "3.0.0"
 $Documents = [Environment]::GetFolderPath("MyDocuments")
 $BackupFolderName = -join @([char]0x4E0D, [char]0x6015, "codex", [char]0x7F62, [char]0x5DE5)
 if ([string]::IsNullOrWhiteSpace($Destination)) {
@@ -67,11 +67,33 @@ function Show-ResultNotification {
     }
 }
 
+function Test-SensitiveRelativePath {
+    param(
+        [ValidateSet("codex", "projects", "skills", "metadata")]
+        [string]$Category,
+        [string]$RelativePath
+    )
+
+    $Path = $RelativePath.Replace("\", "/")
+    if ($Category -eq "codex" -and $Path -eq "auth.json") {
+        return (-not $IncludeAuth)
+    }
+    if ($Category -eq "codex" -and $Path -eq "config.toml") {
+        return $true
+    }
+    if ($Path -match "(?:^|/)(?:\.env(?:\..*)?|\.npmrc|\.pypirc|\.netrc|\.git-credentials|id_rsa|id_ed25519|credentials(?:\..*)?)(?:/|$)" -or
+        $Path -match "(?:^|/)\.git/config$" -or
+        $Path -match "\.(?:pem|key|p12|pfx|kdbx)$") {
+        return $true
+    }
+    return $false
+}
+
 function Test-CodexExcluded {
     param([string]$RelativePath)
 
     $Path = $RelativePath.Replace("\", "/")
-    if (-not $IncludeAuth -and $Path -eq "auth.json") { return $true }
+    if (Test-SensitiveRelativePath -Category "codex" -RelativePath $Path) { return $true }
     if ($Path -match "^packages(?:/|$)") { return $true }
     if ($Path -match "^logs_.*\.sqlite(?:-wal|-shm)?$") { return $true }
     if ($Path -match "^plugins/cache(?:/|$)") { return $true }
@@ -103,6 +125,43 @@ function Test-ProjectExcluded {
     return $false
 }
 
+function Test-ArchiveChecksum {
+    param([string]$Path)
+
+    $ChecksumPath = "$Path.sha256"
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $ChecksumPath -PathType Leaf)) {
+        return $false
+    }
+    try {
+        $Line = Get-Content -LiteralPath $ChecksumPath -TotalCount 1 -ErrorAction Stop
+        if ($Line -notmatch '^([A-Fa-f0-9]{64})  (.+)$') { return $false }
+        $ExpectedHash = $matches[1].ToLowerInvariant()
+        $ExpectedName = $matches[2]
+        $ActualHash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
+        return (($ExpectedName -eq [System.IO.Path]::GetFileName($Path)) -and ($ExpectedHash -eq $ActualHash))
+    }
+    catch {
+        return $false
+    }
+}
+
+function Clear-AbandonedPublishArtifacts {
+    param([string]$Root)
+
+    # A ZIP without a checksum may be a legacy archive or a file that needs
+    # manual inspection, so it is retained but never counted for retention.
+    # v3 writes sidecars first and the final ZIP last, making sidecars without
+    # a ZIP the only safe artifacts to remove after a hard interruption.
+    Get-ChildItem -LiteralPath $Root -Filter "codex-local-backup-*.zip.sha256" -File -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            $ArchivePath = $_.FullName.Substring(0, $_.FullName.Length - ".sha256".Length)
+            if (-not (Test-Path -LiteralPath $ArchivePath -PathType Leaf)) {
+                Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
+            }
+        }
+}
+
 function Add-TreeToZip {
     param(
         [object]$Zip,
@@ -118,43 +177,57 @@ function Add-TreeToZip {
     }
 
     $Root = [System.IO.Path]::GetFullPath($SourceRoot).TrimEnd([char]92, [char]47)
+    if (((Get-Item -LiteralPath $Root -Force).Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "Refusing to follow a reparse-point source directory: $Root"
+    }
     [long]$FileCount = 0
     [long]$ByteCount = 0
 
-    $Files = Get-ChildItem -LiteralPath $Root -File -Recurse -Force
-    foreach ($File in $Files) {
-        if (($File.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
-            Write-Log -Level "WARN" -Message "Skipping reparse point: $($File.FullName)"
-            continue
+    $PendingDirectories = [System.Collections.Generic.Stack[string]]::new()
+    $PendingDirectories.Push($Root)
+    while ($PendingDirectories.Count -gt 0) {
+        $CurrentDirectory = $PendingDirectories.Pop()
+        foreach ($Item in @(Get-ChildItem -LiteralPath $CurrentDirectory -Force -ErrorAction Stop)) {
+            if (($Item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                Write-Log -Level "WARN" -Message "Skipping reparse point: $($Item.FullName)"
+                continue
+            }
+            if ($Item.PSIsContainer) {
+                $PendingDirectories.Push($Item.FullName)
+                continue
+            }
+            if (-not $Item.PSIsContainer) {
+                $File = $Item
+                $Relative = $File.FullName.Substring($Root.Length).TrimStart([char]92, [char]47)
+                if ($Category -ne "metadata" -and (Test-SensitiveRelativePath -Category $Category -RelativePath $Relative)) { continue }
+                if ($Category -eq "codex" -and (Test-CodexExcluded -RelativePath $Relative)) { continue }
+                if ($Category -eq "projects" -and (Test-ProjectExcluded -RelativePath $Relative)) { continue }
+
+                $EntryName = ($ArchivePrefix.TrimEnd([char]47) + "/" + $Relative.Replace("\", "/"))
+                $Entry = $Zip.CreateEntry($EntryName, [System.IO.Compression.CompressionLevel]::Optimal)
+                $Entry.LastWriteTime = $File.LastWriteTime
+
+                $InputStream = $null
+                $OutputStream = $null
+                try {
+                    $InputStream = [System.IO.File]::Open(
+                        $File.FullName,
+                        [System.IO.FileMode]::Open,
+                        [System.IO.FileAccess]::Read,
+                        ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete)
+                    )
+                    $OutputStream = $Entry.Open()
+                    $InputStream.CopyTo($OutputStream, 1048576)
+                }
+                finally {
+                    if ($null -ne $OutputStream) { $OutputStream.Dispose() }
+                    if ($null -ne $InputStream) { $InputStream.Dispose() }
+                }
+
+                [void]($FileCount++)
+                $ByteCount += $File.Length
+            }
         }
-
-        $Relative = $File.FullName.Substring($Root.Length).TrimStart([char]92, [char]47)
-        if ($Category -eq "codex" -and (Test-CodexExcluded -RelativePath $Relative)) { continue }
-        if ($Category -eq "projects" -and (Test-ProjectExcluded -RelativePath $Relative)) { continue }
-
-        $EntryName = ($ArchivePrefix.TrimEnd([char]47) + "/" + $Relative.Replace("\", "/"))
-        $Entry = $Zip.CreateEntry($EntryName, [System.IO.Compression.CompressionLevel]::Optimal)
-        $Entry.LastWriteTime = $File.LastWriteTime
-
-        $InputStream = $null
-        $OutputStream = $null
-        try {
-            $InputStream = [System.IO.File]::Open(
-                $File.FullName,
-                [System.IO.FileMode]::Open,
-                [System.IO.FileAccess]::Read,
-                ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete)
-            )
-            $OutputStream = $Entry.Open()
-            $InputStream.CopyTo($OutputStream, 1048576)
-        }
-        finally {
-            if ($null -ne $OutputStream) { $OutputStream.Dispose() }
-            if ($null -ne $InputStream) { $InputStream.Dispose() }
-        }
-
-        $FileCount++
-        $ByteCount += $File.Length
     }
 
     return @{ Files = $FileCount; Bytes = $ByteCount }
@@ -166,7 +239,25 @@ function Test-ZipArchive {
     $Zip = [System.IO.Compression.ZipFile]::OpenRead($Path)
     try {
         $Buffer = New-Object byte[] 1048576
+        $HasManifest = $false
+        $HasState = $false
         foreach ($Entry in $Zip.Entries) {
+            $EntryName = $Entry.FullName
+            if ($EntryName -match "(^/|^\.(/|$)|(^|/)\.\.(/|$)|//|/\./)") {
+                throw "Unsafe ZIP entry: $EntryName"
+            }
+            $Category = $null
+            if ($EntryName -eq "codex-home" -or $EntryName.StartsWith("codex-home/")) { $Category = "codex" }
+            elseif ($EntryName -eq "projects" -or $EntryName.StartsWith("projects/")) { $Category = "projects" }
+            elseif ($EntryName -eq "agents-skills" -or $EntryName.StartsWith("agents-skills/")) { $Category = "skills" }
+            elseif ($EntryName -eq "backup-metadata" -or $EntryName.StartsWith("backup-metadata/")) { $Category = "metadata" }
+            else { throw "Unexpected ZIP entry: $EntryName" }
+            $Relative = if ($EntryName.Contains("/")) { $EntryName.Substring($EntryName.IndexOf("/") + 1) } else { "" }
+            if ($Category -ne "metadata" -and (Test-SensitiveRelativePath -Category $Category -RelativePath $Relative)) {
+                throw "Sensitive file was included in ZIP: $EntryName"
+            }
+            if ($EntryName -eq "backup-metadata/MANIFEST.txt") { $HasManifest = $true }
+            if ($EntryName -eq "codex-home/state_5.sqlite" -or $EntryName -eq "backup-metadata/sqlite-consistent-snapshots/state_5.sqlite") { $HasState = $true }
             if ($Entry.Length -eq 0) { continue }
             $Stream = $Entry.Open()
             try {
@@ -175,6 +266,9 @@ function Test-ZipArchive {
             finally {
                 $Stream.Dispose()
             }
+        }
+        if (-not $HasManifest -or -not $HasState) {
+            throw "ZIP is missing required Codex metadata or state."
         }
     }
     finally {
@@ -236,6 +330,8 @@ $LockAcquired = $false
 $TempRoot = $null
 $PartialArchive = $null
 $ChecksumTemp = $null
+$Archive = $null
+$PublishedArchive = $false
 $ResultStatus = "failed"
 $ResultMessage = "Backup failed. Check last-run.log."
 $ExitCode = 0
@@ -257,6 +353,7 @@ try {
         New-Item -ItemType Directory -Path $Destination -Force | Out-Null
         Get-ChildItem -LiteralPath $Destination -Filter "codex-local-backup-*.partial.zip" -File -ErrorAction SilentlyContinue |
             Remove-Item -Force -ErrorAction SilentlyContinue
+        Clear-AbandonedPublishArtifacts -Root $Destination
 
         $TempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-backup-" + [Guid]::NewGuid().ToString("N"))
         $MetadataRoot = Join-Path $TempRoot "backup-metadata"
@@ -304,6 +401,7 @@ Default exclusions:
 - logs_*.sqlite and transient SQLite files when online snapshots exist
 - plugin, browser, computer-use, shell, and temporary caches
 - auth.json unless -IncludeAuth is used
+- config.toml, .env files, private keys, credential files, and Git remotes
 - project dependency/cache folders unless -IncludeDependencies is used
 
 Restore note:
@@ -356,17 +454,31 @@ currently implemented only for Mac-to-Mac archives.
         }
 
         Test-ZipArchive -Path $PartialArchive
+        if ($env:CODEX_BACKUP_TEST_FAIL_AFTER_VERIFY -eq "1") {
+            throw "Test injection: stopped after ZIP verification."
+        }
         $Hash = (Get-FileHash -LiteralPath $PartialArchive -Algorithm SHA256).Hash.ToLowerInvariant()
         $ChecksumTemp = Join-Path $Destination ".$BackupName.sha256.tmp"
         Set-Content -LiteralPath $ChecksumTemp -Value "$Hash  $([System.IO.Path]::GetFileName($Archive))" -Encoding ASCII
 
-        Move-Item -LiteralPath $PartialArchive -Destination $Archive
-        $PartialArchive = $null
         Move-Item -LiteralPath $ChecksumTemp -Destination "$Archive.sha256"
         $ChecksumTemp = $null
+        if ($env:CODEX_BACKUP_TEST_CRASH_AT -eq "after-sidecar-publish") {
+            Stop-Process -Id $PID -Force
+        }
+        Move-Item -LiteralPath $PartialArchive -Destination $Archive
+        $PartialArchive = $null
+        $PublishedArchive = $true
 
         $Archives = @(Get-ChildItem -LiteralPath $Destination -Filter "codex-local-backup-*.zip" -File |
             Where-Object { $_.Name -notlike "*.partial.zip" } |
+            Where-Object {
+                $IsValid = Test-ArchiveChecksum -Path $_.FullName
+                if (-not $IsValid) {
+                    Write-Log -Level "WARN" -Message "Not counting unverified archive for retention: $($_.Name)"
+                }
+                $IsValid
+            } |
             Sort-Object LastWriteTime -Descending)
         if ($Archives.Count -gt $Keep) {
             $Archives | Select-Object -Skip $Keep | ForEach-Object {
@@ -393,6 +505,10 @@ finally {
     }
     if ($null -ne $ChecksumTemp -and (Test-Path -LiteralPath $ChecksumTemp)) {
         Remove-Item -LiteralPath $ChecksumTemp -Force -ErrorAction SilentlyContinue
+    }
+    if (-not $PublishedArchive -and $null -ne $Archive) {
+        Remove-Item -LiteralPath $Archive -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath "$Archive.sha256" -Force -ErrorAction SilentlyContinue
     }
     if ($null -ne $TempRoot -and (Test-Path -LiteralPath $TempRoot)) {
         Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction SilentlyContinue

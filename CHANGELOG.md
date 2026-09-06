@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased - Selected Mac transfer preview
+
+- Add one native chooser for exporting one project or conversation with the actual project files and importing a single data ZIP from any selected location.
+- Keep the nightly job separate. Selected transfer needs no pairing code, fixed inbox, model call or post-import full backup; the input ZIP is retained.
+- Prune unrelated database rows, compact the snapshot, stream project files, verify internal per-file SHA-256 hashes and replace only the same selection's successfully verified prior export.
+- Preserve destination projects and edited files; use stable per-archive imported conversation IDs. Restore legacy JSON project layout and current SQLite project associations, and rebase session working directories.
+- Handle the current section appearance column, reject unsupported artifact/history formats, detect both Codex and ChatGPT processes, fix missing-file rollback, and avoid rewriting unrelated providers.
+- Include the concise `codex-local-transfer` skill, synthetic merge/failure tests and an optional installed-schema smoke test. This preview is not a GitHub release or a claim of physical second-Mac UI verification.
+
+## 3.0.0 - 2026-08-10
+
+- Add signed, paired Mac-to-Mac migration packages. The external drive carries ZIP, SHA-256, signature, and plain-text instructions only.
+- Make the new Mac use a fixed local `待恢复` inbox and a local double-click restore entrypoint. Recovery input is deleted only after a newly created local backup verifies.
+- Preserve old Mac projects in a dedicated namespace and retain independent new Mac projects, ungrouped chats, memory, skills, and instructions without overwriting the destination account.
+- Add preflight checks for disk space, schema fingerprints, SQLite integrity and foreign keys, signed source identity, safe paths, active Codex writes, and symbolic links.
+- Add journaled recovery for interrupted restore transactions, stale-lock reclamation after a hard crash, and installation rollback that restores the prior LaunchAgent and installed program.
+- Publish archives atomically from temporary ZIPs after checksum sidecars exist. Retention counts only verified archives and does not silently delete unverified legacy files.
+- Extend Windows streaming backup with sensitive-file exclusions, reparse-point refusal, checksum-based retention, crash-safe publish ordering, and installer mutual exclusion.
+- Expand fixture coverage for signatures, inbox selection, disk preflight, locks, schema mismatch, hard crashes, safe destination paths, double-click cleanup, installation rollback, and Windows exclusions.
+
 ## 2.3.0 - 2026-08-07
 
 - Make external-drive Mac migration data-only: transfer folders now contain only the backup ZIP, SHA-256 file, and plain-text instructions.

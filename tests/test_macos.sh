@@ -49,6 +49,7 @@ run_backup() {
   CODEX_PROJECTS_DIR="$projects" \
   AGENTS_SKILLS_DIR="$agents_skills" \
   CODEX_BACKUP_INSTALL_ROOT="$install_root" \
+  CODEX_BACKUP_TEST_CRASH_AT="${CODEX_BACKUP_TEST_CRASH_AT:-}" \
     /bin/zsh "$backup_script" --dest "$1" "${@:2}"
 }
 
@@ -117,6 +118,29 @@ full_listing="$(/usr/bin/bsdtar -tf "${full_archive[1]}")"
 assert_entry "$full_listing" "codex-home/auth.json"
 assert_entry "$full_listing" "projects/app/.venv/dependency.bin"
 assert_entry "$full_listing" "projects/app/node_modules/pkg/index.js"
+
+# A hard kill before the final ZIP rename must leave the old complete archive
+# untouched. The next run only removes the incomplete temporary publish.
+crash_dest="$test_root/crash-recovery"
+run_backup "$crash_dest"
+sleep 1
+set +e
+CODEX_BACKUP_TEST_CRASH_AT=after-sidecar-publish run_backup "$crash_dest" >/dev/null 2>&1
+crash_rc=$?
+set -e
+(( crash_rc == 137 )) || { print -u2 -- "Expected hard-crash exit 137, got $crash_rc"; exit 1; }
+crash_archives=("$crash_dest"/codex-local-backup-*.zip(N))
+formal_crash_archives=("${(@)crash_archives:#*.partial.zip}")
+(( ${#formal_crash_archives[@]} == 1 )) || { print -u2 -- 'Interrupted publish produced a formal ZIP'; exit 1; }
+crash_partials=("$crash_dest"/codex-local-backup-*.partial.zip(N))
+(( ${#crash_partials[@]} == 1 )) || { print -u2 -- 'Expected one interrupted temporary ZIP'; exit 1; }
+run_backup "$crash_dest"
+crash_archives=("$crash_dest"/codex-local-backup-*.zip(N))
+formal_crash_archives=("${(@)crash_archives:#*.partial.zip}")
+if (( ${#formal_crash_archives[@]} != 1 )) || [[ ! -f "${formal_crash_archives[1]}.sha256" ]]; then
+  print -u2 -- 'Interrupted publish was counted as a successful backup'
+  exit 1
+fi
 
 failure_dest="$test_root/failure"
 mkdir -p "$failure_dest"

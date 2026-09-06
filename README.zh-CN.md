@@ -1,160 +1,102 @@
 # 不怕 Codex 罢工
 
-这是一个给普通用户使用的 Codex 本地备份与迁移工具，支持 macOS 和 Windows 每日备份，并优先支持 Mac → Mac 合并恢复。
+**这是一个不需要每天操作的 Codex 本地备份工具。每天 23:50 由电脑系统直接备份，不启动 Codex，不调用模型，自动备份消耗 0 token。**
 
-它每天晚上 23:50 由电脑系统直接执行，不启动 Codex，不调用模型，所以自动备份消耗 **0 token**。
+它解决的是本地资料不见、换电脑、换账号后历史任务不显示时的后路：聊天、memory、skills、项目和生成内容仍留在你自己手里。
 
-## 最简单安装方法
+## 先做这两步
 
-先从 [Releases](https://github.com/jianhong001/codex-backup-portable-kit/releases/latest) 下载最新版并解压。
+**只想带走一个项目或一条聊天？** 在完整工具包内双击 `转移选定聊天-macOS.command`：旧 Mac 选择导出，新 Mac 选择导入，只传一个 ZIP，不需要安装每日备份或输入配对码。默认包含聊天和实际项目文件，不包含其他聊天或全局 memory/skills。完整步骤与限制见 [怎么用.md](怎么用.md)。此入口为当前源码新增功能，未发布的源码不代表 GitHub 最新 Release 已包含它。
 
-Mac 用户双击：
+以下是整机每日备份的安装步骤：
 
-```text
-安装-macOS.command
-```
+1. 从 [Releases](https://github.com/jianhong001/codex-backup-portable-kit/releases/latest) 下载最新版并解压。
+2. Mac 双击 `安装-macOS.command`，Windows 双击 `安装-Windows.cmd`。
 
-Windows 用户双击：
-
-```text
-安装-Windows.cmd
-```
-
-安装后不用每天操作。成功或失败时，电脑会显示本机通知。
-
-Mac 第一次自动运行时，系统可能询问是否允许“终端”访问“文稿”文件夹。请选择允许，否则项目目录无法进入备份。
-
-## 备份保存在哪里
-
-Mac：
+之后不需要每天点。备份会放在：
 
 ```text
-~/Documents/不怕codex罢工
+Mac：文稿/不怕codex罢工
+Windows：文档/不怕codex罢工
 ```
 
-Windows：
+新 ZIP 必须完整校验成功，才会成为新的正式备份。任何失败都不会删除你的原文件，也不会删掉上一份已验证备份。
 
-```text
-文档\不怕codex罢工
-```
+## 默认保存什么
 
-默认只保留最新一份成功备份。新备份没有验证成功以前，旧备份绝对不会删除。
-
-## 换 Mac 或换 OpenAI 账号
-
-Mac → Mac 已提供离线双击恢复，不需要安装 Python、Homebrew 或 npm，也不会调用模型。
-
-### 旧 Mac
-
-1. 完全退出 Codex App。
-2. 插入 U 盘或移动硬盘。
-3. 双击 `第1步-旧Mac制作迁移包.command`，按提示选择硬盘。
-
-硬盘里会生成一个 `不怕Codex罢工-迁移到新Mac` 文件夹，里面只有最新 ZIP、SHA-256 和纯文本说明，不包含可执行脚本。再次制作时，只有新 ZIP 验证成功后才会删除旧 ZIP。
-
-### 新 Mac
-
-1. 从 [Releases](https://github.com/jianhong001/codex-backup-portable-kit/releases/latest) 下载最新版，双击 `安装-macOS.command`。这是唯一可能需要 macOS 确认下载程序的一次。
-2. 安装 Codex，登录新的 OpenAI 账号，至少打开一次 Codex，然后完全退出。
-3. 插入硬盘，但不要运行硬盘里的任何脚本。
-4. 在新 Mac 的 `文稿/不怕codex罢工` 文件夹，双击本机的 `第2步-新Mac恢复聊天.command`。
-5. 在文件选择框中选中 U 盘 `不怕Codex罢工-迁移到新Mac` 文件夹里的 ZIP。
-6. 显示“恢复成功”后重新打开 Codex。
-
-恢复采用合并方式：
-
-- 新 Mac 已有聊天不会被覆盖。
-- 旧 Mac 聊天会加入左侧任务列表，可以继续打开和对话。
-- 同一个任务 ID 如果两边内容已经分叉，会生成一个稳定的新 ID，让两个版本都可见；重复恢复不会不断复制。
-- memory 文档和数据库、goals、skills、项目、附件与生成文件会合并。
-- 旧 Mac 的绝对项目路径会改成新 Mac 的用户目录。
-- 旧 Mac 已放进项目的聊天会保留分组，项目显示为“原项目名（旧 Mac 电脑名）”。电脑名会在制作迁移包时自动读取。
-- 新 Mac 已有的同名项目不会合并或覆盖，仍是独立项目；旧 Mac 没有归属项目的聊天统一放进“旧 Mac 导入聊天（旧 Mac 电脑名）”。
-- `auth.json`、Cookie、旧账号登录状态和旧 `config.toml` 不会写入新 Mac。
-
-写入前程序会创建“恢复前安全备份”，任何中途失败都会自动回滚。安全备份和文件冲突包都只保留最新一份。
-
-这样做不会关闭 macOS 的安全保护：首次安装和第一次允许“终端”访问“文稿”仍由系统决定；但每次迁移都不再运行 U 盘里的外来脚本，也不再出现额外的“开始合并”确认。
-
-## 会保存什么
-
-- Codex 聊天和 session 本地文件
-- 左侧项目分组和聊天归属
-- memory
-- skills
-- Codex 设置和必要状态
+- 本地聊天 JSONL、侧栏索引、SQLite 状态、memory、skills
 - `Documents/Codex` 里的代码、文档、输出文件和 Git 历史
-- 生成图片与附件
-- 一份备份内容清单和 SHA-256 校验文件
+- `~/.agents/skills` 里的共享 skills
+- 生成图片、附件、自动化、可视化等不能重新下载的本地内容
 
 ## 默认不保存什么
 
-- `auth.json` 登录令牌
-- 可以重新下载的 Codex 安装组件
-- 大型运行日志和缓存
-- 浏览器 Cookie、Login Data 等敏感应用数据
-- 项目中的 `.venv`、`node_modules` 和开发缓存
+- `auth.json`、`config.toml`、`.env`、私钥、凭据文件、Git 远程配置
+- Cookie、浏览器登录数据和 Codex App 浏览器资料
+- 可以重新下载的 Codex 组件、大型日志、缓存和临时文件
+- 项目里的 `.venv`、`venv`、`node_modules`、`__pycache__` 和常见开发缓存
 
-排除这些内容不会删除电脑上的原文件，只是每天不重复把它们装进备份 ZIP。
+这些只是“不装进 ZIP”，不会删除电脑里的原文件。需要依赖时可用高级参数 `--include-dependencies` 或 `-IncludeDependencies`。普通备份也保留 `--include-auth`，但它会包含登录令牌，必须私下保管；Mac 迁移包永远不会包含账号凭据。
 
-## 为什么比旧版省空间
+## 换 Mac 或换 OpenAI 账号
 
-旧版会先完整复制一份数据，再压缩成 ZIP。新版直接把文件逐个写入 ZIP，不再生成整份暂存副本。
+Mac → Mac 提供离线合并恢复。它是“本地资料迁移”，不是 OpenAI 官方账号迁移：只在新旧 Mac 的本地 Codex 索引格式兼容时合并，并且不会迁移云端权限、订阅或服务端数据。
 
-在开发新版的实际电脑上，压缩前需要处理的数据从接近 6GB 降到约 1.5GB。每台电脑的数据不同，最终大小会有差异。
+### 旧 Mac 怎么做
 
-## 想马上备份
+1. 打开 `文稿/不怕codex罢工`，双击 `第1步-旧Mac制作迁移包.command`。
+2. 程序会请求 Codex 安全退出，保证迁移包一致。
+3. 完成后，在 `文稿/不怕codex罢工/迁移包` 会出现一组文件。
+4. 把其中唯一的 `codex-migration-*.zip`、同名 `.sha256`、同名 `.signature` 复制到 U 盘、移动硬盘或其他私密传输方式。
+5. 记下旧 Mac 显示的配对码。第一次在新 Mac 导入这台旧 Mac 时要输入一次。
 
-Mac 双击：
+外接硬盘只负责带数据，里面不需要、也不应该运行任何脚本。
 
-```text
-立即备份-macOS.command
-```
+### 新 Mac 怎么做
 
-Windows 双击：
+1. 先安装最新版“不怕 Codex 罢工”。再登录目标 OpenAI 账号，打开 Codex 一次，然后完全退出 Codex。
+2. 把旧 Mac 的 ZIP、`.sha256`、`.signature` 三个文件都复制到 `文稿/不怕codex罢工/待恢复`。里面只能有一个 ZIP。
+3. 在新 Mac 本机的 `文稿/不怕codex罢工` 双击 `第2步-新Mac恢复聊天.command`。
+4. 如果是第一次导入这台旧 Mac，输入刚才记下的配对码。
 
-```text
-立即备份-Windows.cmd
-```
+程序会先验证签名、配对码、磁盘空间和本地数据结构，再建立可回滚事务和“恢复前安全备份”。恢复后会马上创建并校验一份新的本机备份。只有这份新备份成功，`待恢复` 里的三个迁移文件才会自动删除。
 
-## 想关闭每天自动备份
+恢复结果：
 
-Mac 双击：
+- 新 Mac 已有聊天、项目、账号设置不会被覆盖。
+- 同一个任务 ID 两边内容不同，会保留两个可见副本；重复恢复不会无限复制。
+- 旧 Mac 的项目单独放到 `旧 Mac 导入项目/<旧设备编号>`，侧栏名称会自动带旧 Mac 电脑名。
+- 新 Mac 原有同名项目仍是独立项目。
+- `auth.json`、`config.toml`、Cookie、旧账号登录状态和订阅不会写入新 Mac。
 
-```text
-卸载-macOS.command
-```
+## 为什么不太占硬盘
 
-Windows 双击：
+程序逐文件写入 `*.partial.zip`，不会先复制出一整份临时资料。SQLite 在系统有 `sqlite3` 时会先做一致性快照。校验文件先准备好，最后一步才把临时 ZIP 改为正式 ZIP。
 
-```text
-卸载-Windows.cmd
-```
+默认只保留最新一份“校验正确”的正式备份。旧的损坏 ZIP 或老版本 ZIP 不会被偷偷删除，只会不参与自动淘汰，方便你自己检查。
 
-关闭定时任务不会删除现有备份，手动备份仍然可以使用。
+定时备份、迁移、恢复和安装共用互斥锁，不会同时改聊天数据库。日志只保留一份 `last-run.log`，不会越积越大。
 
-## 重要说明
+## Windows 说明
 
-Mac → Mac 恢复会按当前 Codex 本地格式合并 `state_5.sqlite`、会话 JSONL 和 `session_index.jsonl`。它解决的是本地任务可见性，不会把旧账号的云端权限、套餐、远程任务或服务端数据迁到新账号。
+Windows 同样支持每天 23:50、0 token、流式 ZIP、敏感文件排除、SHA-256 校验、只保留最新有效备份，以及错过时间后由任务计划程序补做。
 
-备份中可能包含私人聊天、memory、代码和工作文件。不要上传到公开 GitHub、公开网盘或发送给别人。
+当前“把旧聊天重新合并到 Codex 左侧任务栏”的自动恢复只优先支持 Mac → Mac。Windows 备份仍然可以保存和带走本地资料，但不承诺跨系统侧栏恢复。
 
-Windows 每日备份仍然受支持；自动合并并重新显示左侧任务的恢复流程目前先支持 Mac → Mac，不把 Mac 应用状态强行写到 Windows。
+## 想手动操作
 
-恢复逻辑参考并核对了社区项目 [codex-history-sync-tool](https://github.com/GODGOD126/codex-history-sync-tool) 与 [codex-threadripper](https://github.com/Wangnov/codex-threadripper) 对 provider、SQLite 和 JSONL 元数据的处理方式，同时增加了跨电脑传输、合并、冲突副本和回滚保护。
+立即备份：双击 `立即备份-macOS.command` 或 `立即备份-Windows.cmd`。
 
-## 高级参数
+关闭每天自动备份：双击 `卸载-macOS.command` 或 `卸载-Windows.cmd`。关闭不会删除已有 ZIP。
 
-Mac：
+高级参数：
 
 ```bash
 zsh codex_backup.sh --dry-run
 zsh codex_backup.sh --include-dependencies
 zsh codex_backup.sh --keep 3
-zsh codex_restore_macos.sh --archive /Volumes/你的硬盘/codex-local-backup.zip --dry-run --yes
+zsh codex_backup.sh --migration --dest ~/Documents/不怕codex罢工/迁移包
 ```
-
-Windows：
 
 ```powershell
 .\codex_backup.ps1 -DryRun
@@ -162,4 +104,8 @@ Windows：
 .\codex_backup.ps1 -Keep 3
 ```
 
-默认仍建议使用 `Keep 1`，最省硬盘。
+## 重要安全边界
+
+备份可能包含私人聊天、memory、代码和工作文件。不要上传到公开 GitHub、公开网盘或发送给不可信的人。
+
+这个工具保护的是本地资料和可验证的迁移包，不保证 OpenAI 云端聊天、套餐、权限或未来 Codex 版本的内部格式一定可迁移。更多说明见 [SECURITY.md](SECURITY.md)。

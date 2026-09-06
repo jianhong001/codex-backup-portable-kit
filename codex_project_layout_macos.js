@@ -138,12 +138,16 @@ const importMapPath = environmentValue('CODEX_PROJECT_LAYOUT_IMPORT_MAP');
 const sourceCwdPath = environmentValue('CODEX_PROJECT_LAYOUT_SOURCE_CWDS');
 const outputLayoutPath = environmentValue('CODEX_PROJECT_LAYOUT_OUTPUT_MAP');
 const outputSummaryPath = environmentValue('CODEX_PROJECT_LAYOUT_SUMMARY');
+const outputExternalPaths = environmentValue('CODEX_PROJECT_LAYOUT_EXTERNAL_PATHS');
 const oldHome = environmentValue('CODEX_PROJECT_LAYOUT_OLD_HOME');
 const newHome = environmentValue('CODEX_PROJECT_LAYOUT_NEW_HOME');
 const projectsRoot = environmentValue('CODEX_PROJECT_LAYOUT_PROJECTS_ROOT');
+const sourceProjectsRoot = environmentValue('CODEX_PROJECT_LAYOUT_SOURCE_PROJECTS_ROOT');
+const importRoot = environmentValue('CODEX_PROJECT_LAYOUT_IMPORT_ROOT');
 const sourceComputerName = environmentValue('CODEX_PROJECT_LAYOUT_COMPUTER_NAME') || '旧 Mac';
+const sourceDeviceId = environmentValue('CODEX_PROJECT_LAYOUT_DEVICE_ID') || sourceComputerName;
 
-if (!targetGlobalPath || !importMapPath || !outputLayoutPath || !outputSummaryPath || !newHome || !projectsRoot) {
+if (!targetGlobalPath || !importMapPath || !outputLayoutPath || !outputSummaryPath || !newHome || !projectsRoot || !importRoot) {
   throw new Error('Project layout helper is missing required inputs');
 }
 
@@ -162,14 +166,29 @@ const targetProjectOrder = asArray(targetState, 'project-order');
 const targetProjectless = asArray(targetState, 'projectless-thread-ids');
 const targetSavedRoots = asArray(targetState, 'electron-saved-workspace-roots');
 
+const externalRoots = {};
+
+function isWithin(path, root) {
+  return Boolean(root) && (path === root || path.startsWith(`${root}/`));
+}
+
+function externalImportPath(path) {
+  const target = joinPath(importRoot, '_external', sha256(String(path)).slice(0, 16));
+  externalRoots[target] = String(path);
+  return target;
+}
+
 function rebasePath(path) {
   if (typeof path !== 'string' || !path) {
     return '';
   }
-  if (oldHome && (path === oldHome || path.startsWith(`${oldHome}/`))) {
-    return `${newHome}${path.slice(oldHome.length)}`;
+  if (isWithin(path, sourceProjectsRoot)) {
+    return `${importRoot}${path.slice(sourceProjectsRoot.length)}`;
   }
-  return path;
+  if (oldHome && (path === oldHome || path.startsWith(`${oldHome}/`))) {
+    return externalImportPath(path);
+  }
+  return externalImportPath(path);
 }
 
 const sourceCwds = {};
@@ -206,7 +225,7 @@ function projectRoots(project, fallbackCwd, projectKey) {
   if (fallback) {
     return [fallback];
   }
-  return [joinPath(projectsRoot, '旧 Mac 导入项目', safeFolderName(projectKey))];
+  return [joinPath(importRoot, '未归类', safeFolderName(projectKey))];
 }
 
 function planFor(sourceProjectId, fallbackCwd) {
@@ -221,7 +240,7 @@ function planFor(sourceProjectId, fallbackCwd) {
     : (basename(fallbackCwd) || '旧 Mac 项目');
   const name = displayName(typeof sourceProject.name === 'string' && sourceProject.name ? sourceProject.name : fallbackName);
   const roots = projectRoots(sourceProject, fallbackCwd, fallbackName);
-  const identity = `codex-backup-project:${sourceComputerName}:${normalizedSourceId}`;
+  const identity = `codex-backup-project:${sourceDeviceId}:${normalizedSourceId}`;
   let targetProjectId = deterministicUuid(identity);
   let salt = 0;
   while (isObject(targetProjects[targetProjectId])) {
@@ -334,6 +353,12 @@ targetState['project-order'] = targetProjectOrder.concat(orderedPlanIds);
 
 writeText(targetGlobalPath, `${JSON.stringify(targetState)}\n`);
 writeText(outputLayoutPath, layoutRows.length > 0 ? `${layoutRows.join('\n')}\n` : '');
+if (outputExternalPaths) {
+  const rows = Object.keys(externalRoots)
+    .sort()
+    .map((target) => `${target}\t${externalRoots[target]}`);
+  writeText(outputExternalPaths, rows.length > 0 ? `${rows.join('\n')}\n` : '');
+}
 writeText(outputSummaryPath, [
   `projects\t${planOrder.length}`,
   `assigned_threads\t${layoutRows.length}`,
