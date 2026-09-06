@@ -178,11 +178,11 @@ try {
     $CrashExit = Invoke-Backup -Destination $CrashDestination
     $env:CODEX_BACKUP_TEST_CRASH_AT = ""
     Assert-True ($CrashExit -ne 0) "Expected injected hard crash"
-    Assert-True ((Get-FormalArchives -Destination $CrashDestination).Count -eq 1) "Interrupted publish produced a formal ZIP"
+    Assert-True (@(Get-FormalArchives -Destination $CrashDestination).Count -eq 1) "Interrupted publish produced a formal ZIP"
     Assert-True (@(Get-ChildItem -LiteralPath $CrashDestination -Filter "*.partial.zip" -File).Count -eq 1) "Expected an interrupted temporary ZIP"
     $Exit = Invoke-Backup -Destination $CrashDestination
     Assert-True ($Exit -eq 0) "Post-crash backup failed"
-    $CrashArchives = Get-FormalArchives -Destination $CrashDestination
+    $CrashArchives = @(Get-FormalArchives -Destination $CrashDestination)
     Assert-True ($CrashArchives.Count -eq 1) "Interrupted publish was counted as a successful backup"
     Assert-True (Test-Path -LiteralPath "$($CrashArchives[0].FullName).sha256") "Post-crash backup is missing a checksum"
 
